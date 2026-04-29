@@ -1,9 +1,5 @@
 /* 평면도 위치관리 — ES6 모듈 */
 import { Assets, Floorplans } from '../store.js';
-import { storage } from '../firebase.js';
-import {
-  ref as storageRef, uploadBytes, getDownloadURL, deleteObject
-} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-storage.js';
 import { isAdmin } from '../auth.js';
 import { toast } from '../ui/toast.js';
 
@@ -34,7 +30,7 @@ export async function renderFloorplan(root) {
   fp.assets = assets;
   fp.plans = {};
   for (const p of planList) {
-    if (p && p.image_url) fp.plans[p.id] = p;
+    if (p && p.image_data) fp.plans[p.id] = p;
   }
 
   root.innerHTML = buildShell(isAdmin());
@@ -161,13 +157,33 @@ function refreshUploadPanel(root) {
     handleUpload(e.target.files[0], root));
   root.querySelector('#fpDeleteBtn')?.addEventListener('click', async () => {
     if (!confirm(`${fp.floor} 평면도를 삭제하시겠습니까?`)) return;
-    try {
-      await deleteObject(storageRef(storage, `floorplans/${fp.floor}`));
-    } catch (_) { /* 이미 없으면 무시 */ }
     await Floorplans.remove(fp.floor);
     delete fp.plans[fp.floor];
     toast(`${fp.floor} 평면도를 삭제했습니다.`, 'info');
     refreshAll(root);
+  });
+}
+
+/* 이미지를 canvas로 압축해 base64 반환 (Firestore 1MB 제한 대응) */
+function compressImage(file) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const MAX = 1200;
+      let w = img.naturalWidth, h = img.naturalHeight;
+      if (w > MAX || h > MAX) {
+        if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+        else       { w = Math.round(w * MAX / h); h = MAX; }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      resolve({ data: canvas.toDataURL('image/jpeg', 0.75), width: w, height: h });
+    };
+    img.onerror = reject;
+    img.src = url;
   });
 }
 
@@ -176,26 +192,21 @@ async function handleUpload(file, root) {
   if (!file.type.startsWith('image/')) { toast('이미지 파일만 가능합니다.', 'error'); return; }
   if (file.size > 10 * 1024 * 1024) { toast('10MB 이하 파일만 가능합니다.', 'error'); return; }
 
-  toast('업로드 중...', 'info');
+  toast('압축 및 저장 중...', 'info');
   try {
-    /* 1. Firebase Storage에 업로드 */
-    const fileRef = storageRef(storage, `floorplans/${fp.floor}`);
-    await uploadBytes(fileRef, file, { contentType: file.type });
-    const downloadURL = await getDownloadURL(fileRef);
+    const { data, width, height } = await compressImage(file);
 
-    /* 2. 이미지 크기 측정 */
-    const dims = await new Promise(resolve => {
-      const img = new Image();
-      img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
-      img.src = URL.createObjectURL(file);
-    });
+    /* base64 크기 체크 (~750KB 한도) */
+    if (data.length > 900_000) {
+      toast('이미지가 너무 큽니다. 더 작은 파일을 사용해주세요.', 'error');
+      return;
+    }
 
-    /* 3. Firestore에 메타데이터 저장 */
     const record = {
       id: fp.floor, floor: fp.floor,
-      image_url: downloadURL, image_name: file.name,
-      image_type: file.type,
-      width: dims.width, height: dims.height,
+      image_data: data, image_name: file.name,
+      image_type: 'image/jpeg',
+      width, height,
     };
     await Floorplans.put(record);
     fp.plans[fp.floor] = record;
@@ -204,7 +215,7 @@ async function handleUpload(file, root) {
     refreshAll(root);
   } catch (err) {
     console.error(err);
-    toast('업로드 실패: ' + err.message, 'error');
+    toast('저장 실패: ' + err.message, 'error');
   }
 }
 
@@ -237,7 +248,7 @@ function refreshViewer(root) {
   }
 
   const img = root.querySelector('#fpImg');
-  img.src = plan.image_url;
+  img.src = plan.image_data;
   img.style.width  = plan.width  + 'px';
   img.style.height = plan.height + 'px';
   applyTransform(root.querySelector('#fpCanvasInner'));
