@@ -13,7 +13,7 @@ import { renderSettings } from './views/settings.js';
 import { renderGuide } from './views/guide.js';
 
 const ROUTES = {
-  dashboard:        { title: '대시보드',         render: renderDashboard,        admin: false },
+  dashboard:        { title: '현황판',         render: renderDashboard,        admin: false },
   assetSearch:      { title: '자산 검색',        render: renderAssetSearch,      admin: false },
   moveRequest:      { title: '자산 이동 신청',   render: renderMoveRequest,      admin: false },
   disposalRequest:  { title: '폐기 신청',        render: renderDisposalRequest,  admin: false },

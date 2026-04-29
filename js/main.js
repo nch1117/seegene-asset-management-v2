@@ -19,7 +19,7 @@ function showView(name) {
 /* ─── 사이드바 메뉴 빌드 ─── */
 const MENU = [
   { section: '공통' },
-  { route: 'dashboard',   label: '대시보드',     icon: 'fa-chart-line' },
+  { route: 'dashboard',   label: '현황판',     icon: 'fa-chart-line' },
   { route: 'assetSearch', label: '자산 검색',    icon: 'fa-magnifying-glass' },
   { section: '부서 담당자', deptOnly: true },
   { route: 'moveRequest',     label: '이동 신청',    icon: 'fa-paper-plane',  deptOnly: true },

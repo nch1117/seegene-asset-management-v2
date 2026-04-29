@@ -1,4 +1,4 @@
-/* 대시보드 — KPI + 차트 + 교차분석 + 4종 필터 */
+/* 현황판 — KPI + 차트 + 교차분석 + 4종 필터 */
 import { Assets, MoveRequests } from '../store.js';
 import { isAdmin } from '../auth.js';
 
