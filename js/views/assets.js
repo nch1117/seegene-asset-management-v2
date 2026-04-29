@@ -8,6 +8,14 @@ const FLOORS = ['2층', '3층', '4층', '5층', '6층', '7층'];
 const CAT_PREFIX = { 'PC': 'PC', '노트북': 'NB', '모니터': 'MN', '프린터': 'PR', '스캐너': 'SC',
   '복합기': 'MF', '서버': 'SV', '네트워크': 'NW', '의자': 'CH', '책상': 'DS', '냉장고': 'RF',
   '에어컨': 'AC', '전화기': 'PH', '태블릿': 'TB', '카메라': 'CM' };
+const CATEGORIES = Object.keys(CAT_PREFIX);
+
+function catSelect(name, selected = '', required = false) {
+  return `<select name="${name}" class="input"${required ? ' required' : ''}>
+    <option value="">품목 선택${required ? ' *' : ''}</option>
+    ${CATEGORIES.map(c => `<option value="${c}"${selected === c ? ' selected' : ''}>${c}</option>`).join('')}
+  </select>`;
+}
 
 function badge(s) {
   const cls = s === '정상' ? 'ok' : s === '수리중' ? 'repair' : s === '폐기' ? 'disposed' : '';
@@ -104,7 +112,7 @@ export async function openAssetEdit(assetId, afterAction) {
       </div>
       <div>
         <label class="block text-sm mb-1">품목 <span class="text-red-500">*</span></label>
-        <input name="item_category" class="input" value="${a.item_category || ''}" required />
+        ${catSelect('item_category', a.item_category || '', true)}
       </div>
       <div>
         <label class="block text-sm mb-1">상태</label>
@@ -276,16 +284,19 @@ export async function renderAssetRegister(root) {
       <form id="regForm" class="grid md:grid-cols-2 gap-4">
         <div>
           <label class="block text-sm mb-1">품목 <span class="text-red-500">*</span></label>
-          <input id="regCategory" name="item_category" class="input" placeholder="PC / 모니터 / 의자..." required />
+          <select id="regCategory" name="item_category" class="input" required>
+            <option value="">품목 선택</option>
+            ${CATEGORIES.map(c => `<option value="${c}">${c}</option>`).join('')}
+          </select>
         </div>
         <div>
           <label class="block text-sm mb-1">자산명 <span class="text-red-500">*</span></label>
           <input name="asset_name" class="input" required />
         </div>
         <div>
-          <label class="block text-sm mb-1">자산코드 <span class="text-xs text-slate-400">(품목 입력 후 자동 생성)</span></label>
+          <label class="block text-sm mb-1">자산코드 <span class="text-xs text-slate-400">(품목 선택 후 자동 생성)</span></label>
           <div class="flex gap-2">
-            <input id="regCode" name="asset_code" class="input" placeholder="품목을 먼저 입력하세요" />
+            <input id="regCode" name="asset_code" class="input" placeholder="품목을 먼저 선택하세요" />
             <button type="button" id="genCodeBtn" class="btn-secondary shrink-0"><i class="fas fa-magic"></i></button>
           </div>
         </div>
@@ -331,14 +342,14 @@ export async function renderAssetRegister(root) {
 
   /* 자동 생성 버튼 */
   root.querySelector('#genCodeBtn').addEventListener('click', async () => {
-    const cat = root.querySelector('#regCategory').value.trim();
-    if (!cat) { toast('품목을 먼저 입력하세요.', 'warning'); return; }
+    const cat = root.querySelector('#regCategory').value;
+    if (!cat) { toast('품목을 먼저 선택하세요.', 'warning'); return; }
     root.querySelector('#regCode').value = await generateAssetCode(cat);
   });
 
-  /* 품목 입력 시 자동으로 코드 채우기 */
+  /* 품목 선택 시 자동으로 코드 채우기 */
   root.querySelector('#regCategory').addEventListener('change', async e => {
-    const cat = e.target.value.trim();
+    const cat = e.target.value;
     if (cat) root.querySelector('#regCode').value = await generateAssetCode(cat);
   });
 
