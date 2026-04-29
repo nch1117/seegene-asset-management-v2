@@ -70,6 +70,8 @@ export async function renderMoveRequest(root) {
     `;
 
     let filteredAssets = assets.filter(a => a.status !== '폐기');
+    const PAGE_SIZE = 20;
+    let currentPage = 1;
 
     const renderList = () => {
       const text  = root.querySelector('#s1Text').value.trim().toLowerCase();
@@ -85,9 +87,19 @@ export async function renderMoveRequest(root) {
         }
         return true;
       });
+      currentPage = 1;
+      renderPage();
+    };
+
+    const renderPage = () => {
+      const total = filteredAssets.length;
+      const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+      currentPage = Math.min(currentPage, totalPages);
+      const pageItems = filteredAssets.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
       const body = root.querySelector('#s1Body');
-      body.innerHTML = filteredAssets.length
-        ? filteredAssets.map(a => {
+      body.innerHTML = pageItems.length
+        ? pageItems.map(a => {
             const sel = selectedAsset?.id === a.id;
             return `<tr class="cursor-pointer ${sel ? 'bg-brand-50 dark:bg-red-950' : ''}" data-id="${a.id}">
               <td><input type="radio" class="accent-brand-500" name="assetPick"${sel ? ' checked' : ''} /></td>
@@ -101,7 +113,18 @@ export async function renderMoveRequest(root) {
           }).join('')
         : `<tr><td colspan="7" class="text-center py-8 text-slate-400">검색 결과가 없습니다.</td></tr>`;
 
-      root.querySelector('#s1Hint').textContent = `${filteredAssets.length}건`;
+      /* 페이지네이션 */
+      const hint = root.querySelector('#s1Hint');
+      hint.innerHTML = `
+        <span>총 ${total}건 (${currentPage}/${totalPages} 페이지)</span>
+        <span class="inline-flex gap-1 ml-3">
+          <button id="s1PrevPage" class="px-2 py-0.5 rounded border text-xs ${currentPage <= 1 ? 'opacity-30 pointer-events-none' : 'hover:bg-slate-100 dark:hover:bg-slate-700'}">‹ 이전</button>
+          <button id="s1NextPage" class="px-2 py-0.5 rounded border text-xs ${currentPage >= totalPages ? 'opacity-30 pointer-events-none' : 'hover:bg-slate-100 dark:hover:bg-slate-700'}">다음 ›</button>
+        </span>`;
+
+      hint.querySelector('#s1PrevPage')?.addEventListener('click', () => { currentPage--; renderPage(); });
+      hint.querySelector('#s1NextPage')?.addEventListener('click', () => { currentPage++; renderPage(); });
+
       updateNext();
     };
 
@@ -113,7 +136,7 @@ export async function renderMoveRequest(root) {
       const tr = e.target.closest('tr[data-id]');
       if (!tr) return;
       selectedAsset = assets.find(a => a.id === tr.dataset.id) || null;
-      renderList();
+      renderPage();
     });
 
     ['s1Text','s1Floor','s1Dept'].forEach(id =>
