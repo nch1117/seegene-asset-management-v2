@@ -72,6 +72,8 @@ export async function renderQR(root) {
 
   let filtered = [...assets];
   let selected = new Set();
+  const PAGE_SIZE = 20;
+  let currentPage = 1;
 
   /* 필터 이벤트 */
   ['qrFloor','qrDept','qrCat','qrStatus'].forEach(id =>
@@ -89,12 +91,18 @@ export async function renderQR(root) {
       (!cat    || a.item_category === cat)    &&
       (!status || a.status        === status)
     );
+    currentPage = 1;
     renderTable();
   }
 
   function renderTable() {
+    const total = filtered.length;
+    const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+    currentPage = Math.min(currentPage, totalPages);
+    const pageItems = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
     const body = root.querySelector('#assetSelectBody');
-    body.innerHTML = filtered.length ? filtered.map(a => `
+    body.innerHTML = pageItems.length ? pageItems.map(a => `
       <tr>
         <td><input type="checkbox" class="asset-chk accent-brand-500" data-id="${a.id}"${selected.has(a.id) ? ' checked' : ''} /></td>
         <td class="font-mono">${a.asset_code}</td>
@@ -106,7 +114,14 @@ export async function renderQR(root) {
       </tr>`).join('')
       : `<tr><td colspan="7" class="text-center py-6 text-slate-400">필터 결과가 없습니다.</td></tr>`;
 
-    root.querySelector('#filterHint').textContent = `${filtered.length}건 표시`;
+    const hint = root.querySelector('#filterHint');
+    hint.innerHTML = `<span>총 ${total}건 (${currentPage}/${totalPages} 페이지)</span>
+      <span class="inline-flex gap-1 ml-3">
+        <button id="qrPrev" class="px-2 py-0.5 rounded border text-xs ${currentPage<=1?'opacity-30 pointer-events-none':'hover:bg-slate-100 dark:hover:bg-slate-700'}">‹ 이전</button>
+        <button id="qrNext" class="px-2 py-0.5 rounded border text-xs ${currentPage>=totalPages?'opacity-30 pointer-events-none':'hover:bg-slate-100 dark:hover:bg-slate-700'}">다음 ›</button>
+      </span>`;
+    hint.querySelector('#qrPrev')?.addEventListener('click', () => { currentPage--; renderTable(); });
+    hint.querySelector('#qrNext')?.addEventListener('click', () => { currentPage++; renderTable(); });
 
     body.querySelectorAll('.asset-chk').forEach(chk => {
       chk.addEventListener('change', () => {
@@ -119,7 +134,7 @@ export async function renderQR(root) {
 
     const master = root.querySelector('#masterChk');
     master.indeterminate = false;
-    master.checked = filtered.length > 0 && filtered.every(a => selected.has(a.id));
+    master.checked = pageItems.length > 0 && pageItems.every(a => selected.has(a.id));
   }
 
   function updateSelCount() {
@@ -128,7 +143,8 @@ export async function renderQR(root) {
 
   /* 전체 선택/해제 */
   root.querySelector('#masterChk').addEventListener('change', e => {
-    filtered.forEach(a => { if (e.target.checked) selected.add(a.id); else selected.delete(a.id); });
+    const pageItems = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+    pageItems.forEach(a => { if (e.target.checked) selected.add(a.id); else selected.delete(a.id); });
     renderTable();
     updateSelCount();
     renderPreview();
