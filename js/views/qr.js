@@ -204,11 +204,16 @@ function generateQR(a, urlMode, containerId) {
     ? `${location.origin}${location.pathname}#assetSearch?code=${encodeURIComponent(a.asset_code)}`
     : a.asset_code;
 
-  const img = document.createElement('img');
-  img.src = `https://api.qrserver.com/v1/create-qr-code/?size=90x90&margin=2&data=${encodeURIComponent(text)}`;
-  img.alt = a.asset_code;
-  img.style.cssText = 'width:90px;height:90px;display:block';
-  img.onerror = () => { el.innerHTML = '<span class="text-xs text-red-400">QR 생성 실패</span>'; };
   el.innerHTML = '';
-  el.appendChild(img);
+  const canvas = document.createElement('canvas');
+  el.appendChild(canvas);
+
+  /* npm qrcode 라이브러리 — canvas로 직접 렌더링 */
+  if (typeof QRCode !== 'undefined' && QRCode.toCanvas) {
+    QRCode.toCanvas(canvas, text, { width: 90, margin: 1, color: { dark: '#0f172a', light: '#ffffff' } }, err => {
+      if (err) el.innerHTML = '<span class="text-xs text-red-400">QR 오류</span>';
+    });
+  } else {
+    el.innerHTML = '<span class="text-xs text-slate-400">로딩 중...</span>';
+  }
 }
