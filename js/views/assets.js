@@ -370,10 +370,45 @@ export async function renderAssetRegister(root) {
 export async function renderAssetList(root) {
   if (!isAdmin()) return;
   const assets = await Assets.list();
+
+  const depts = [...new Set(assets.map(a => a.department).filter(Boolean))].sort();
+  const items = [...new Set(assets.map(a => a.item_category).filter(Boolean))].sort();
+
   root.innerHTML = `
+    <!-- 필터 바 -->
+    <div class="card mb-4">
+      <div class="flex items-center gap-2 mb-3">
+        <i class="fas fa-filter text-brand-500"></i>
+        <span class="font-semibold text-sm">조건 검색</span>
+        <button id="alResetFilter" class="ml-auto text-xs text-slate-500 hover:text-brand-500">
+          <i class="fas fa-rotate-left mr-1"></i>초기화
+        </button>
+      </div>
+      <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <input id="alText" class="input md:col-span-1" placeholder="코드 / 자산명 검색" />
+        <select id="alFloor" class="input">
+          <option value="">전체 층</option>
+          ${FLOORS.map(f => `<option>${f}</option>`).join('')}
+        </select>
+        <select id="alItem" class="input">
+          <option value="">전체 품목</option>
+          ${items.map(i => `<option>${i}</option>`).join('')}
+        </select>
+        <select id="alStatus" class="input">
+          <option value="">전체 상태</option>
+          ${STATUS_OPTS.map(s => `<option>${s}</option>`).join('')}
+        </select>
+        <select id="alDept" class="input">
+          <option value="">전체 부서</option>
+          ${depts.map(d => `<option>${d}</option>`).join('')}
+        </select>
+      </div>
+      <p id="alSummary" class="text-xs text-slate-400 mt-2"></p>
+    </div>
+
     <div class="card">
       <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
-        <h3 class="font-semibold">전체 자산 (${assets.length}건)</h3>
+        <h3 class="font-semibold" id="alTitle">전체 자산 (${assets.length}건)</h3>
         <button id="exportBtn" class="btn-secondary"><i class="fas fa-file-excel mr-1"></i>엑셀 내보내기</button>
       </div>
       <div class="overflow-x-auto">
@@ -381,62 +416,116 @@ export async function renderAssetList(root) {
           <thead><tr>
             <th>자산코드</th><th>자산명</th><th>품목</th><th>층</th><th>부서</th><th>상태</th><th class="text-right">작업</th>
           </tr></thead>
-          <tbody>
-            ${assets.length ? assets.map(a => `
-              <tr class="cursor-pointer" data-id="${a.id}">
-                <td class="font-mono text-xs">${a.asset_code}</td>
-                <td>${a.asset_name}</td>
-                <td>${a.item_category}</td>
-                <td>${a.floor}</td>
-                <td>${a.department}</td>
-                <td>${badge(a.status)}</td>
-                <td class="text-right whitespace-nowrap">
-                  <button data-edit="${a.id}" class="text-xs px-2 py-1 rounded bg-slate-100 hover:bg-brand-50 hover:text-brand-500 mr-1 dark:bg-slate-700 dark:hover:bg-slate-600" title="수정">
-                    <i class="fas fa-pen"></i>
-                  </button>
-                  ${a.status !== '폐기' ? `<button data-disposal="${a.id}" class="text-xs px-2 py-1 rounded bg-slate-100 hover:bg-amber-50 hover:text-amber-600 mr-1 dark:bg-slate-700" title="폐기처리">
-                    <i class="fas fa-trash-can"></i>
-                  </button>` : ''}
-                  <button data-del="${a.id}" class="text-red-400 hover:text-red-600 text-xs px-1" title="삭제">
-                    <i class="fas fa-xmark"></i>
-                  </button>
-                </td>
-              </tr>`).join('')
-            : `<tr><td colspan="7" class="text-center py-8 text-slate-400">자산이 없습니다.</td></tr>`}
-          </tbody>
+          <tbody id="alBody"></tbody>
         </table>
       </div>
+      <p id="alPager" class="text-xs text-slate-400 mt-2"></p>
     </div>
   `;
 
-  /* 행 클릭 → 상세 */
-  root.querySelectorAll('tr[data-id]').forEach(tr => {
-    tr.addEventListener('click', e => {
-      if (e.target.closest('[data-edit],[data-disposal],[data-del]')) return;
-      openAssetDetail(tr.dataset.id, () => renderAssetList(root));
+  const PAGE_SIZE = 20;
+  let currentPage = 1;
+  let filtered = [...assets];
+
+  const applyFilter = () => {
+    const text   = root.querySelector('#alText').value.trim().toLowerCase();
+    const floor  = root.querySelector('#alFloor').value;
+    const item   = root.querySelector('#alItem').value;
+    const status = root.querySelector('#alStatus').value;
+    const dept   = root.querySelector('#alDept').value;
+    filtered = assets.filter(a =>
+      (!floor  || a.floor         === floor)  &&
+      (!item   || a.item_category === item)   &&
+      (!status || a.status        === status) &&
+      (!dept   || a.department    === dept)   &&
+      (!text   || `${a.asset_code} ${a.asset_name}`.toLowerCase().includes(text))
+    );
+    const active = [floor&&`층:${floor}`, item&&`품목:${item}`, status&&`상태:${status}`, dept&&`부서:${dept}`, text&&`검색:"${text}"`].filter(Boolean);
+    root.querySelector('#alSummary').textContent = active.length
+      ? `필터 적용: ${active.join(' · ')} → ${filtered.length}건 / 전체 ${assets.length}건`
+      : `전체 ${assets.length}건`;
+    currentPage = 1;
+    renderPage();
+  };
+
+  const renderPage = () => {
+    const total = filtered.length;
+    const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+    currentPage = Math.min(currentPage, totalPages);
+    const pageItems = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+    const body = root.querySelector('#alBody');
+    body.innerHTML = pageItems.length ? pageItems.map(a => `
+      <tr class="cursor-pointer" data-id="${a.id}">
+        <td class="font-mono text-xs">${a.asset_code}</td>
+        <td>${a.asset_name}</td>
+        <td>${a.item_category}</td>
+        <td>${a.floor}</td>
+        <td>${a.department}</td>
+        <td>${badge(a.status)}</td>
+        <td class="text-right whitespace-nowrap">
+          <button data-edit="${a.id}" class="text-xs px-2 py-1 rounded bg-slate-100 hover:bg-brand-50 hover:text-brand-500 mr-1 dark:bg-slate-700 dark:hover:bg-slate-600" title="수정">
+            <i class="fas fa-pen"></i>
+          </button>
+          ${a.status !== '폐기' ? `<button data-disposal="${a.id}" class="text-xs px-2 py-1 rounded bg-slate-100 hover:bg-amber-50 hover:text-amber-600 mr-1 dark:bg-slate-700" title="폐기처리">
+            <i class="fas fa-trash-can"></i>
+          </button>` : ''}
+          <button data-del="${a.id}" class="text-red-400 hover:text-red-600 text-xs px-1" title="삭제">
+            <i class="fas fa-xmark"></i>
+          </button>
+        </td>
+      </tr>`).join('')
+      : `<tr><td colspan="7" class="text-center py-8 text-slate-400">조건에 맞는 자산이 없습니다.</td></tr>`;
+
+    root.querySelector('#alTitle').textContent = `자산 목록 (${filtered.length}건)`;
+
+    const pager = root.querySelector('#alPager');
+    pager.innerHTML = total > PAGE_SIZE ? `
+      <span>총 ${total}건 (${currentPage}/${totalPages} 페이지)</span>
+      <span class="inline-flex gap-1 ml-3">
+        <button id="alPrev" class="px-2 py-0.5 rounded border text-xs ${currentPage <= 1 ? 'opacity-30 pointer-events-none' : 'hover:bg-slate-100 dark:hover:bg-slate-700'}">‹ 이전</button>
+        <button id="alNext" class="px-2 py-0.5 rounded border text-xs ${currentPage >= totalPages ? 'opacity-30 pointer-events-none' : 'hover:bg-slate-100 dark:hover:bg-slate-700'}">다음 ›</button>
+      </span>` : '';
+
+    pager.querySelector('#alPrev')?.addEventListener('click', () => { currentPage--; renderPage(); });
+    pager.querySelector('#alNext')?.addEventListener('click', () => { currentPage++; renderPage(); });
+
+    bindRowEvents();
+  };
+
+  const bindRowEvents = () => {
+    root.querySelectorAll('#alBody tr[data-id]').forEach(tr => {
+      tr.addEventListener('click', e => {
+        if (e.target.closest('[data-edit],[data-disposal],[data-del]')) return;
+        openAssetDetail(tr.dataset.id, () => renderAssetList(root));
+      });
     });
-  });
-
-  /* 수정 */
-  root.querySelectorAll('[data-edit]').forEach(b => {
-    b.addEventListener('click', e => { e.stopPropagation(); openAssetEdit(b.dataset.edit, () => renderAssetList(root)); });
-  });
-
-  /* 폐기 */
-  root.querySelectorAll('[data-disposal]').forEach(b => {
-    b.addEventListener('click', e => { e.stopPropagation(); openAssetDisposal(b.dataset.disposal, () => renderAssetList(root)); });
-  });
-
-  /* 삭제 */
-  root.querySelectorAll('[data-del]').forEach(b => {
-    b.addEventListener('click', async e => {
-      e.stopPropagation();
-      if (!confirm('정말 삭제하시겠습니까?')) return;
-      await Assets.remove(b.dataset.del);
-      toast('자산이 삭제되었습니다.', 'success');
-      renderAssetList(root);
+    root.querySelectorAll('#alBody [data-edit]').forEach(b => {
+      b.addEventListener('click', e => { e.stopPropagation(); openAssetEdit(b.dataset.edit, () => renderAssetList(root)); });
     });
+    root.querySelectorAll('#alBody [data-disposal]').forEach(b => {
+      b.addEventListener('click', e => { e.stopPropagation(); openAssetDisposal(b.dataset.disposal, () => renderAssetList(root)); });
+    });
+    root.querySelectorAll('#alBody [data-del]').forEach(b => {
+      b.addEventListener('click', async e => {
+        e.stopPropagation();
+        if (!confirm('정말 삭제하시겠습니까?')) return;
+        await Assets.remove(b.dataset.del);
+        toast('자산이 삭제되었습니다.', 'success');
+        renderAssetList(root);
+      });
+    });
+  };
+
+  ['alText'].forEach(id => root.querySelector('#' + id).addEventListener('input', applyFilter));
+  ['alFloor','alItem','alStatus','alDept'].forEach(id => root.querySelector('#' + id).addEventListener('change', applyFilter));
+  root.querySelector('#alResetFilter').addEventListener('click', () => {
+    root.querySelector('#alText').value = '';
+    ['alFloor','alItem','alStatus','alDept'].forEach(id => { root.querySelector('#' + id).value = ''; });
+    applyFilter();
   });
+
+  applyFilter();
 
   /* 엑셀 */
   root.querySelector('#exportBtn').addEventListener('click', () => {
