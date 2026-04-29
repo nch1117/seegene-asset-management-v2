@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>씨젠의료재단 자산관리시스템 v2</title>
+
+  <!-- Tailwind (Play CDN) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50:  '#fff1f2',
+              100: '#ffe4e6',
+              500: '#ef4444',
+              600: '#dc2626',
+              700: '#b91c1c',
+              900: '#7f1d1d'
+            }
+          },
+          fontFamily: {
+            sans: ['Pretendard', 'system-ui', '-apple-system', 'sans-serif']
+          }
+        }
+      }
+    };
+  </script>
+
+  <!-- Pretendard -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <!-- SheetJS (엑셀) -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <!-- QRCode -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+  <link rel="stylesheet" href="./css/style.css" />
+</head>
+<body class="font-sans bg-slate-50 text-slate-800 dark:bg-slate-900 dark:text-slate-100 min-h-screen">
+
+  <!-- ───── 역할 선택 화면 ───── -->
+  <section id="roleScreen" class="view min-h-screen flex items-center justify-center px-4">
+    <div class="w-full max-w-3xl">
+      <div class="text-center mb-10">
+        <div class="inline-flex items-center justify-center w-20 h-20 mb-4">
+          <img src="./assets/logo.png" alt="씨젠의료재단" class="brand-logo w-20 h-20 object-contain" />
+        </div>
+        <h1 class="text-3xl md:text-4xl font-bold text-slate-900 dark:text-white">씨젠의료재단 자산관리시스템</h1>
+        <p class="text-slate-500 dark:text-slate-400 mt-2">대구경북검사센터 · v2.0</p>
+      </div>
+
+      <div class="grid md:grid-cols-2 gap-4">
+        <button class="role-card group" data-role="dept">
+          <i class="fas fa-user text-4xl text-brand-500 mb-3"></i>
+          <h2 class="text-xl font-semibold mb-1">부서 담당자</h2>
+          <p class="text-sm text-slate-500 dark:text-slate-400">자산 검색 · 이동 신청 · 내 신청 내역</p>
+          <span class="role-card__cta">바로 시작 <i class="fas fa-arrow-right ml-1"></i></span>
+        </button>
+        <button class="role-card group" data-role="admin">
+          <i class="fas fa-user-shield text-4xl text-brand-500 mb-3"></i>
+          <h2 class="text-xl font-semibold mb-1">운영관리팀</h2>
+          <p class="text-sm text-slate-500 dark:text-slate-400">자산 등록 · 승인 · 보고서 (로그인 필요)</p>
+          <span class="role-card__cta">로그인 <i class="fas fa-arrow-right ml-1"></i></span>
+        </button>
+      </div>
+
+      <p class="text-center text-xs text-slate-400 mt-8">
+        <a href="#guide" class="hover:underline"><i class="fas fa-circle-question mr-1"></i>사용 가이드 보기</a>
+      </p>
+    </div>
+  </section>
+
+  <!-- ───── 관리자 로그인 화면 ───── -->
+  <section id="loginScreen" class="view hidden min-h-screen flex items-center justify-center px-4">
+    <div class="w-full max-w-md bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-8">
+      <div class="text-center mb-6">
+        <div class="inline-flex items-center justify-center w-16 h-16 mb-3">
+          <img src="./assets/logo.png" alt="씨젠의료재단" class="brand-logo w-16 h-16 object-contain" />
+        </div>
+        <h2 class="text-2xl font-bold">운영관리팀 로그인</h2>
+        <p class="text-sm text-slate-500 mt-1">관리자 권한이 필요한 페이지에 접근합니다.</p>
+      </div>
+
+      <form id="loginForm" class="space-y-4" autocomplete="off">
+        <div>
+          <label class="block text-sm font-medium mb-1">아이디</label>
+          <input id="loginId" type="text" class="input" placeholder="admin" required />
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1">비밀번호</label>
+          <div class="relative">
+            <input id="loginPw" type="password" class="input pr-10" required />
+            <button type="button" id="togglePw" class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 px-2 py-1">
+              <i class="fas fa-eye"></i>
+            </button>
+          </div>
+        </div>
+        <p id="loginError" class="text-sm text-red-500 hidden"></p>
+        <button type="submit" id="loginBtn" class="btn-primary w-full">
+          <i class="fas fa-sign-in-alt mr-1"></i>로그인
+        </button>
+      </form>
+
+      <div class="mt-6 pt-4 border-t border-slate-200 dark:border-slate-700">
+        <p class="text-xs text-slate-400 mb-2">테스트 계정 (클릭하면 자동 입력)</p>
+        <div class="flex gap-2">
+          <button type="button" class="test-account-card" data-fill="admin|Seegene2025!">
+            <span class="test-account-card__id"><i class="fas fa-user-shield mr-1 text-brand-500"></i>admin</span>
+            <span class="test-account-card__role">운영관리팀 관리자</span>
+          </button>
+          <button type="button" class="test-account-card" data-fill="manager|Manager!23">
+            <span class="test-account-card__id"><i class="fas fa-user mr-1 text-brand-500"></i>manager</span>
+            <span class="test-account-card__role">자산담당 매니저</span>
+          </button>
+        </div>
+      </div>
+
+      <button type="button" id="backToRole" class="mt-6 text-sm text-slate-500 hover:text-brand-500 w-full text-center">
+        <i class="fas fa-arrow-left mr-1"></i>역할 선택으로
+      </button>
+    </div>
+  </section>
+
+  <!-- ───── 앱 레이아웃 ───── -->
+  <section id="appLayout" class="view hidden min-h-screen flex">
+    <!-- Sidebar -->
+    <aside id="sidebar" class="w-64 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 flex-shrink-0 hidden md:flex flex-col">
+      <div class="px-5 py-4 border-b border-slate-200 dark:border-slate-700">
+        <div class="flex items-center gap-2">
+          <div class="w-9 h-9 grid place-items-center">
+            <img src="./assets/logo.png" alt="씨젠의료재단" class="brand-logo w-9 h-9 object-contain" />
+          </div>
+          <div>
+            <p class="font-bold text-sm">자산관리시스템</p>
+            <p class="text-[11px] text-slate-400">v2.0</p>
+          </div>
+        </div>
+      </div>
+
+      <nav id="sideNav" class="flex-1 overflow-y-auto py-3 text-sm"></nav>
+
+      <div class="px-4 py-3 border-t border-slate-200 dark:border-slate-700 text-xs text-slate-500">
+        <p id="sideUserInfo" class="mb-2"></p>
+        <button id="logoutBtn" class="hidden w-full text-left text-slate-500 hover:text-red-500">
+          <i class="fas fa-right-from-bracket mr-1"></i>로그아웃
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <div class="flex-1 flex flex-col min-w-0">
+      <header class="h-14 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between px-4 md:px-6">
+        <div class="flex items-center gap-3">
+          <button id="menuBtn" class="md:hidden text-slate-500"><i class="fas fa-bars text-lg"></i></button>
+          <h1 id="pageTitle" class="font-semibold text-lg">대시보드</h1>
+        </div>
+        <div class="flex items-center gap-3 text-sm">
+          <span id="sessionTimer" class="hidden text-xs text-slate-500"><i class="far fa-clock mr-1"></i><span></span></span>
+
+          <!-- 역할 전환 탭 -->
+          <div id="roleSwitcher" class="hidden items-center bg-slate-100 dark:bg-slate-700 rounded-lg p-0.5 text-xs font-medium">
+            <button id="tabDept" class="role-tab px-3 py-1.5 rounded-md transition-all">
+              <i class="fas fa-user mr-1"></i>부서담당자
+            </button>
+            <button id="tabAdmin" class="role-tab px-3 py-1.5 rounded-md transition-all">
+              <i class="fas fa-user-shield mr-1"></i>운영관리팀
+            </button>
+          </div>
+
+          <button id="darkToggle" class="text-slate-500 hover:text-brand-500" title="다크모드"><i class="fas fa-moon"></i></button>
+          <button id="headerLogout" class="hidden text-slate-500 hover:text-red-500" title="로그아웃"><i class="fas fa-right-from-bracket"></i></button>
+        </div>
+      </header>
+
+      <main id="pageRoot" class="flex-1 overflow-y-auto p-4 md:p-6"></main>
+    </div>
+  </section>
+
+  <!-- ───── 역할 전환 로그인 모달 ───── -->
+  <div id="switchModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+    <div class="w-full max-w-sm bg-white dark:bg-slate-800 rounded-2xl shadow-2xl p-6 mx-4">
+      <div class="text-center mb-5">
+        <div class="inline-flex items-center justify-center w-12 h-12 mb-3">
+          <img src="./assets/logo.png" alt="씨젠의료재단" class="brand-logo w-12 h-12 object-contain" />
+        </div>
+        <h3 class="text-lg font-bold">운영관리팀 로그인</h3>
+        <p class="text-xs text-slate-500 mt-1">계정을 전환하려면 로그인하세요.</p>
+      </div>
+      <form id="switchLoginForm" class="space-y-3" autocomplete="off">
+        <input id="switchId" type="text" class="input" placeholder="아이디" required />
+        <div class="relative">
+          <input id="switchPw" type="password" class="input pr-10" placeholder="비밀번호" required />
+          <button type="button" id="switchTogglePw" class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 px-2 py-1">
+            <i class="fas fa-eye"></i>
+          </button>
+        </div>
+        <p id="switchError" class="text-xs text-red-500 hidden"></p>
+        <div class="flex gap-2 pt-1">
+          <button type="button" class="test-account-card" data-switch-fill="admin|Seegene2025!">
+            <span class="test-account-card__id"><i class="fas fa-user-shield mr-1 text-brand-500"></i>admin</span>
+            <span class="test-account-card__role">운영관리팀 관리자</span>
+          </button>
+          <button type="button" class="test-account-card" data-switch-fill="manager|Manager!23">
+            <span class="test-account-card__id"><i class="fas fa-user mr-1 text-brand-500"></i>manager</span>
+            <span class="test-account-card__role">자산담당 매니저</span>
+          </button>
+        </div>
+        <div class="flex gap-2 pt-1">
+          <button type="button" id="switchCancel" class="flex-1 btn-secondary">취소</button>
+          <button type="submit" id="switchLoginBtn" class="flex-1 btn-primary">
+            <i class="fas fa-sign-in-alt mr-1"></i>전환
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ───── 자산 상세 모달 ───── -->
+  <div id="assetDetailModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+    <div class="w-full max-w-xl bg-white dark:bg-slate-800 rounded-2xl shadow-2xl overflow-hidden">
+      <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+        <h3 class="font-bold text-base"><i class="fas fa-info-circle mr-2 text-brand-500"></i>자산 상세 정보</h3>
+        <button id="detailCloseBtn" class="text-slate-400 hover:text-slate-600 text-xl leading-none">&times;</button>
+      </div>
+      <div id="detailBody" class="px-6 py-5"></div>
+      <div class="flex justify-end gap-2 px-6 py-4 border-t border-slate-200 dark:border-slate-700">
+        <button id="detailDisposalBtn" class="btn-secondary text-amber-600 hover:bg-amber-50 hidden"><i class="fas fa-trash-can mr-1"></i>폐기 처리</button>
+        <button id="detailEditBtn" class="btn-secondary hidden"><i class="fas fa-pen mr-1"></i>수정</button>
+        <button id="detailCloseBtn2" class="btn-primary" onclick="document.getElementById('assetDetailModal').classList.add('hidden');document.body.style.overflow=''">닫기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ───── 자산 수정 모달 ───── -->
+  <div id="assetEditModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+    <div class="w-full max-w-2xl bg-white dark:bg-slate-800 rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+      <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700 shrink-0">
+        <h3 class="font-bold text-base"><i class="fas fa-pen mr-2 text-brand-500"></i>자산 정보 수정</h3>
+        <button id="editCloseBtn" class="text-slate-400 hover:text-slate-600 text-xl leading-none">&times;</button>
+      </div>
+      <div class="overflow-y-auto flex-1 px-6 py-5">
+        <form id="editForm" class="grid md:grid-cols-2 gap-4"></form>
+      </div>
+      <div class="flex justify-end gap-2 px-6 py-4 border-t border-slate-200 dark:border-slate-700 shrink-0">
+        <button type="button" id="editCancelBtn" class="btn-secondary" onclick="document.getElementById('assetEditModal').classList.add('hidden');document.body.style.overflow=''">취소</button>
+        <button type="submit" form="editForm" class="btn-primary"><i class="fas fa-save mr-1"></i>저장</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ───── 자산 폐기 모달 ───── -->
+  <div id="assetDisposalModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+    <div class="w-full max-w-md bg-white dark:bg-slate-800 rounded-2xl shadow-2xl overflow-hidden">
+      <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+        <h3 class="font-bold text-base"><i class="fas fa-trash-can mr-2 text-amber-500"></i>폐기 처리</h3>
+        <button id="disposalCloseBtn" class="text-slate-400 hover:text-slate-600 text-xl leading-none">&times;</button>
+      </div>
+      <form id="disposalForm" class="px-6 py-5 space-y-4">
+        <div class="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800 text-sm">
+          <i class="fas fa-exclamation-triangle text-amber-500 mr-1"></i>
+          <span id="disposalAssetName" class="font-semibold"></span>을(를) 폐기 처리합니다.
+        </div>
+        <div>
+          <label class="block text-sm mb-1">폐기일자 <span class="text-red-500">*</span></label>
+          <input id="disposalDate" type="date" class="input" required />
+        </div>
+        <div>
+          <label class="block text-sm mb-1">폐기 사유</label>
+          <textarea id="disposalReason" class="input" rows="3" placeholder="폐기 사유를 입력하세요..."></textarea>
+        </div>
+        <div class="flex gap-2 pt-1">
+          <button type="button" id="disposalCancelBtn" class="flex-1 btn-secondary">취소</button>
+          <button type="submit" class="flex-1 btn-primary bg-amber-500 hover:bg-amber-600"><i class="fas fa-trash-can mr-1"></i>폐기 확정</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ───── 토스트 컨테이너 ───── -->
+  <div id="toastRoot" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2"></div>
+
+  <!-- 진입 -->
+  <script type="module" src="./js/main.js"></script>
+</body>
+</html>
