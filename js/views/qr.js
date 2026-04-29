@@ -68,11 +68,6 @@ export async function renderQR(root) {
         <div id="labelGrid" class="qr-label-grid"></div>
       </div>
     </div>
-
-    <!-- 인쇄 전용 영역 -->
-    <div id="printArea" style="display:none">
-      <div id="printGrid" class="qr-label-grid"></div>
-    </div>
   `;
 
   let filtered = [...assets];
@@ -166,16 +161,23 @@ export async function renderQR(root) {
     if (!selected.size) { toast('인쇄할 자산을 선택하세요.', 'warning'); return; }
     const selAssets = assets.filter(a => selected.has(a.id));
     const urlMode = root.querySelector('#urlMode').checked;
-    const printArea = document.getElementById('printArea');
-    const printGrid = document.getElementById('printGrid');
-    printGrid.innerHTML = selAssets.map(a => labelHtml(a, urlMode, true)).join('');
-    printArea.style.display = 'block';
+
+    /* body 직접 자식으로 삽입해야 @media print CSS가 정상 동작 */
+    const printArea = document.createElement('div');
+    printArea.id = 'printArea';
+    printArea.innerHTML = `<div id="printGrid" class="qr-label-grid">${
+      selAssets.map(a => labelHtml(a, urlMode, true)).join('')
+    }</div>`;
+    document.body.appendChild(printArea);
+
     selAssets.forEach(a => generateQR(a, urlMode, `qrprint-${a.id}`));
+
+    /* QR 렌더링 완료 후 인쇄 */
     setTimeout(() => {
       window.print();
-      printArea.style.display = 'none';
+      document.body.removeChild(printArea);
       toast('인쇄 창이 열렸습니다. PDF로 저장할 수 있습니다.', 'info');
-    }, 300);
+    }, 500);
   });
 
   renderTable();
