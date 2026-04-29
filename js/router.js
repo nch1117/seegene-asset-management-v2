@@ -4,7 +4,7 @@ import { toast } from './ui/toast.js';
 
 import { renderDashboard } from './views/dashboard.js';
 import { renderAssetSearch, renderAssetList, renderAssetRegister } from './views/assets.js';
-import { renderMoveRequest, renderMyRequests, renderApproveRequests, renderMoveHistory } from './views/moves.js';
+import { renderMoveRequest, renderMyRequests, renderApproveRequests, renderMoveHistory, renderDisposalRequest } from './views/moves.js';
 import { renderFloorplan } from './views/floorplan.js';
 import { renderExcelUpload } from './views/excel-upload.js';
 import { renderQR } from './views/qr.js';
@@ -16,6 +16,7 @@ const ROUTES = {
   dashboard:        { title: '대시보드',         render: renderDashboard,        admin: false },
   assetSearch:      { title: '자산 검색',        render: renderAssetSearch,      admin: false },
   moveRequest:      { title: '자산 이동 신청',   render: renderMoveRequest,      admin: false },
+  disposalRequest:  { title: '폐기 신청',        render: renderDisposalRequest,  admin: false },
   myRequests:       { title: '내 신청 내역',     render: renderMyRequests,       admin: false },
   guide:            { title: '사용 가이드',      render: renderGuide,            admin: false },
   register:         { title: '자산 등록',        render: renderAssetRegister,    admin: true  },
