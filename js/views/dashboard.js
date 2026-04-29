@@ -207,6 +207,8 @@ function statusBadge(s) {
   return `<span class="badge">${s || '-'}</span>`;
 }
 
+const DEPT_COLORS = ['#ef4444','#f97316','#eab308','#22c55e','#3b82f6','#8b5cf6','#ec4899','#14b8a6'];
+
 function deptSummary(assets) {
   const map = new Map();
   for (const a of assets) {
@@ -216,16 +218,19 @@ function deptSummary(assets) {
   const sorted = [...map.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
   const max = sorted[0]?.[1] || 1;
   if (!sorted.length) return `<p class="text-xs text-slate-400 text-center py-4">데이터 없음</p>`;
-  return sorted.map(([dept, cnt]) => `
+  return sorted.map(([dept, cnt], i) => {
+    const color = DEPT_COLORS[i % DEPT_COLORS.length];
+    return `
     <div class="mb-1.5">
       <div class="flex justify-between text-xs mb-0.5">
         <span class="truncate max-w-[130px]">${dept}</span>
-        <span class="font-bold text-brand-500 ml-1">${cnt}</span>
+        <span class="font-bold ml-1" style="color:${color}">${cnt}</span>
       </div>
       <div class="h-1.5 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden">
-        <div class="h-full bg-brand-500 rounded-full" style="width:${Math.round(cnt/max*100)}%"></div>
+        <div class="h-full rounded-full" style="width:${Math.round(cnt/max*100)}%;background:${color}"></div>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 function recentRequests(requests, assets) {
@@ -260,6 +265,9 @@ function destroyChart(name) {
   if (charts[name]) { charts[name].destroy(); charts[name] = null; }
 }
 
+const FLOOR_COLORS = ['#ef4444','#f97316','#eab308','#22c55e','#3b82f6','#8b5cf6'];
+const FLOOR_HOVER  = ['#dc2626','#ea580c','#ca8a04','#16a34a','#2563eb','#7c3aed'];
+
 function drawFloorChart(assets) {
   const ctx = document.getElementById('chartFloor');
   if (!ctx) return;
@@ -269,7 +277,7 @@ function drawFloorChart(assets) {
     type: 'bar',
     data: {
       labels: FLOORS,
-      datasets: [{ label: '자산 수', data: counts, backgroundColor: '#ef4444', hoverBackgroundColor: '#dc2626', borderRadius: 6 }]
+      datasets: [{ label: '자산 수', data: counts, backgroundColor: FLOOR_COLORS, hoverBackgroundColor: FLOOR_HOVER, borderRadius: 6 }]
     },
     options: {
       responsive: true,
