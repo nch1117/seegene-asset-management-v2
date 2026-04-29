@@ -7,7 +7,7 @@ const STATUS_OPTS = ['정상', '수리중', '폐기'];
 const FLOORS = ['2층', '3층', '4층', '5층', '6층', '7층'];
 const CAT_PREFIX = { 'PC': 'PC', '노트북': 'NB', '모니터': 'MN', '프린터': 'PR', '스캐너': 'SC',
   '복합기': 'MF', '서버': 'SV', '네트워크': 'NW', '의자': 'CH', '책상': 'DS', '냉장고': 'RF',
-  '에어컨': 'AC', '전화기': 'PH', '태블릿': 'TB', '카메라': 'CM' };
+  '에어컨': 'AC', '전화기': 'PH', '태블릿': 'TB', '카메라': 'CM', '기타': 'ETC' };
 const CATEGORIES = Object.keys(CAT_PREFIX);
 
 function catSelect(name, selected = '', required = false) {
