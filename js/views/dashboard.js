@@ -103,7 +103,6 @@ export async function renderDashboard(root) {
         ${kpi('이번 달 처리', thisMonth, 'fa-calendar-check')}
       </div>
 
-      ${admin ? `
       <div class="grid lg:grid-cols-2 gap-4 mb-4">
         <div class="card">
           <div class="flex items-center justify-between mb-1">
@@ -125,7 +124,6 @@ export async function renderDashboard(root) {
         </div>
         <div style="height:140px"><canvas id="chartCross"></canvas></div>
       </div>
-      ` : ''}
 
       <div class="grid lg:grid-cols-3 gap-4 mb-4">
         <!-- 최근 등록 자산 -->
@@ -149,20 +147,18 @@ export async function renderDashboard(root) {
       </div>
 
       <!-- 최근 이동 신청 -->
-      ${admin ? `<div class="card">
+      <div class="card">
         <div class="flex items-center justify-between mb-2">
           <h3 class="font-semibold text-sm"><i class="fas fa-paper-plane mr-1 text-brand-500"></i>최근 이동 신청</h3>
-          <a href="#approveRequests" class="text-xs text-brand-500 hover:underline">전체 보기 →</a>
+          ${admin ? `<a href="#approveRequests" class="text-xs text-brand-500 hover:underline">전체 보기 →</a>` : `<a href="#myRequests" class="text-xs text-brand-500 hover:underline">내 신청 →</a>`}
         </div>
         ${recentRequests(requests, allAssets)}
-      </div>` : ''}
+      </div>
     `;
 
-    if (admin) {
-      drawFloorChart(assets);
-      drawItemChart(assets);
-      drawCrossChart(assets, state.selectedFloor);
-    }
+    drawFloorChart(assets);
+    drawItemChart(assets);
+    drawCrossChart(assets, state.selectedFloor);
   }
 
   renderContent();
