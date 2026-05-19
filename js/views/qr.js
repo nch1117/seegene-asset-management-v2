@@ -4,15 +4,6 @@ import { toast } from '../ui/toast.js';
 
 const FLOORS = ['2층', '3층', '4층', '5층', '6층', '7층'];
 
-/* ── 카메라 스캔 상태 ── */
-let scanStream   = null;
-let scanFrameId  = null;
-
-function stopCamera() {
-  if (scanStream)  { scanStream.getTracks().forEach(t => t.stop()); scanStream = null; }
-  if (scanFrameId) { cancelAnimationFrame(scanFrameId); scanFrameId = null; }
-}
-
 export async function renderQR(root) {
   const assets = await Assets.list();
 
@@ -27,11 +18,17 @@ export async function renderQR(root) {
         <div class="flex items-center justify-between flex-wrap gap-2">
           <div>
             <h3 class="font-semibold"><i class="fas fa-camera mr-1 text-brand-500"></i>QR 스캔</h3>
-            <p class="text-xs text-slate-400 mt-0.5">카메라로 QR 코드를 인식하면 해당 자산을 바로 검색합니다.</p>
+            <p class="text-xs text-slate-400 mt-0.5">카메라로 QR 코드를 촬영하면 해당 자산을 바로 검색합니다.</p>
           </div>
-          <button id="openScanBtn" class="btn-primary">
-            <i class="fas fa-qrcode mr-1"></i>카메라로 QR 스캔
-          </button>
+          <div class="flex gap-2">
+            <label for="qrCaptureInput" class="btn-primary cursor-pointer select-none inline-flex items-center">
+              <i class="fas fa-camera mr-1"></i>카메라 촬영
+            </label>
+            <button id="openManualBtn" class="btn-secondary text-sm">
+              <i class="fas fa-keyboard mr-1"></i>직접 입력
+            </button>
+          </div>
+          <input type="file" id="qrCaptureInput" accept="image/*" capture="environment" class="hidden" />
         </div>
       </div>
 
@@ -92,34 +89,23 @@ export async function renderQR(root) {
       </div>
     </div>
 
-    <!-- 카메라 스캔 모달 -->
+    <!-- 스캔 결과 모달 -->
     <div id="qrScanModal" class="modal-backdrop hidden">
       <div class="modal-box max-w-sm w-full">
         <div class="flex items-center justify-between mb-3">
-          <h4 class="font-semibold"><i class="fas fa-camera mr-1 text-brand-500"></i>QR 스캔</h4>
+          <h4 class="font-semibold"><i class="fas fa-qrcode mr-1 text-brand-500"></i>QR 스캔 결과</h4>
           <button id="closeScanModal" class="text-slate-400 hover:text-slate-600 text-lg leading-none">&times;</button>
         </div>
 
-        <div class="relative rounded overflow-hidden bg-black aspect-video">
-          <video id="scanVideo" class="w-full h-full object-cover" autoplay muted playsinline></video>
-          <canvas id="scanCanvas" class="hidden"></canvas>
-          <!-- 스캔 가이드 오버레이 -->
-          <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <div class="w-40 h-40 border-2 border-white rounded opacity-60"></div>
-          </div>
-        </div>
-
-        <p id="scanStatus" class="text-center text-sm mt-2 text-slate-500">
-          <i class="fas fa-spinner fa-spin mr-1"></i>카메라를 QR 코드에 가져다 대세요
-        </p>
+        <p id="scanStatus" class="text-center text-sm my-2 text-slate-500 min-h-[1.5rem]"></p>
 
         <div id="scanResult" class="hidden mt-2 p-3 bg-green-50 dark:bg-green-900/20 rounded border border-green-200 dark:border-green-800 text-sm"></div>
 
-        <!-- 수동 입력 -->
+        <!-- 직접 입력 -->
         <div class="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
-          <p class="text-xs text-slate-400 mb-1">카메라 사용 불가 시 직접 입력</p>
+          <p class="text-xs text-slate-400 mb-1">자산코드 직접 입력</p>
           <div class="flex gap-2">
-            <input id="manualCode" class="input flex-1 text-sm" placeholder="자산코드 입력 (예: PC-250519-0001)" />
+            <input id="manualCode" class="input flex-1 text-sm" placeholder="예: PC-250519-0001" />
             <button id="manualSearchBtn" class="btn-primary text-sm px-3">검색</button>
           </div>
         </div>
@@ -132,79 +118,76 @@ export async function renderQR(root) {
   const PAGE_SIZE = 20;
   let currentPage = 1;
 
-  /* ── 스캔 모달 ── */
   const scanModal = root.querySelector('#qrScanModal');
 
-  function openScanModal() {
+  /* ── 모달 열기/닫기 ── */
+  function openScanModal(statusHtml = '') {
+    root.querySelector('#scanStatus').innerHTML = statusHtml;
+    root.querySelector('#scanResult').classList.add('hidden');
+    root.querySelector('#manualCode').value = '';
     scanModal.classList.remove('hidden');
     document.body.style.overflow = 'hidden';
-    startCamera();
   }
 
   function closeScanModal() {
-    stopCamera();
     scanModal.classList.add('hidden');
     document.body.style.overflow = '';
-    root.querySelector('#scanStatus').innerHTML =
-      '<i class="fas fa-spinner fa-spin mr-1"></i>카메라를 QR 코드에 가져다 대세요';
-    root.querySelector('#scanResult').classList.add('hidden');
-    root.querySelector('#manualCode').value = '';
   }
 
-  root.querySelector('#openScanBtn').addEventListener('click', openScanModal);
   root.querySelector('#closeScanModal').addEventListener('click', closeScanModal);
   scanModal.addEventListener('click', e => { if (e.target === scanModal) closeScanModal(); });
 
-  function startCamera() {
-    if (!navigator.mediaDevices?.getUserMedia) {
-      root.querySelector('#scanStatus').textContent = '이 브라우저에서는 카메라를 지원하지 않습니다.';
-      return;
-    }
-    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
-      .then(stream => {
-        scanStream = stream;
-        const video = root.querySelector('#scanVideo');
-        video.srcObject = stream;
-        video.play();
-        video.addEventListener('loadedmetadata', () => scanFrame(), { once: true });
-      })
-      .catch(() => {
-        root.querySelector('#scanStatus').textContent = '카메라 권한이 거부되었습니다. 아래에서 직접 입력해주세요.';
-      });
-  }
+  /* ── 직접 입력 버튼 ── */
+  root.querySelector('#openManualBtn').addEventListener('click', () => openScanModal());
 
-  function scanFrame() {
-    const video  = root.querySelector('#scanVideo');
-    const canvas = root.querySelector('#scanCanvas');
-    if (!scanStream) return;
+  /* ── 카메라 촬영 (네이티브 카메라) ── */
+  root.querySelector('#qrCaptureInput').addEventListener('change', e => {
+    const file = e.target.files[0];
+    e.target.value = ''; // 동일 파일 재선택 허용
+    if (!file) return;
 
-    if (video.readyState === video.HAVE_ENOUGH_DATA) {
-      canvas.width  = video.videoWidth;
-      canvas.height = video.videoHeight;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    openScanModal('<i class="fas fa-spinner fa-spin mr-1"></i>QR 인식 중...');
 
-      if (typeof jsQR !== 'undefined') {
-        const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'dontInvert' });
-        if (code) {
-          onQRDetected(code.data);
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width  = img.width;
+        canvas.height = img.height;
+        canvas.getContext('2d').drawImage(img, 0, 0);
+        const imageData = canvas.getContext('2d')
+          .getImageData(0, 0, canvas.width, canvas.height);
+
+        if (typeof jsQR === 'undefined') {
+          root.querySelector('#scanStatus').textContent = 'QR 스캔 라이브러리를 불러올 수 없습니다.';
           return;
         }
-      }
-    }
-    scanFrameId = requestAnimationFrame(scanFrame);
-  }
 
+        const detected = jsQR(imageData.data, imageData.width, imageData.height,
+          { inversionAttempts: 'attemptBoth' });
+
+        if (detected) {
+          onQRDetected(detected.data);
+        } else {
+          root.querySelector('#scanStatus').innerHTML =
+            '<i class="fas fa-triangle-exclamation text-amber-500 mr-1"></i>QR 코드를 인식하지 못했습니다. 다시 촬영해주세요.';
+        }
+      };
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+
+  /* ── QR 감지 처리 ── */
   function onQRDetected(rawText) {
-    stopCamera();
-    /* URL 모드: https://...#assetSearch?code=SGM-PC-... → code 추출 */
-    let code = rawText;
+    /* URL 모드: https://...#assetSearch?code=... → code 추출 */
+    let code = rawText.trim();
     try {
       const url = new URL(rawText);
       const c = new URLSearchParams(url.hash.split('?')[1] || '').get('code');
       if (c) code = c;
-    } catch { /* not a URL, use raw text as code */ }
+    } catch { /* plain text code */ }
 
     const found = assets.find(a => a.asset_code === code);
     const resultEl = root.querySelector('#scanResult');
@@ -218,7 +201,7 @@ export async function renderQR(root) {
         <p class="font-mono text-xs">${found.asset_code}</p>
         <p class="font-medium">${found.asset_name}</p>
         <p class="text-xs text-slate-500">${found.floor} ${found.room || ''} · ${found.department}</p>
-        <button id="goToAsset" class="btn-primary text-xs mt-2 w-full">자산 검색으로 이동</button>`;
+        <button id="goToAsset" class="btn-primary text-xs mt-2 w-full">자산 상세 보기</button>`;
       resultEl.classList.remove('hidden');
       statusEl.innerHTML = '<i class="fas fa-check text-green-500 mr-1"></i>스캔 완료';
 
@@ -230,21 +213,17 @@ export async function renderQR(root) {
       resultEl.innerHTML = `
         <p class="text-amber-600 dark:text-amber-400">
           <i class="fas fa-triangle-exclamation mr-1"></i>
-          자산을 찾을 수 없습니다: <span class="font-mono text-xs">${code}</span>
+          등록된 자산을 찾을 수 없습니다: <span class="font-mono text-xs">${code}</span>
         </p>
-        <button id="retryScan" class="btn-secondary text-xs mt-2 w-full">다시 스캔</button>`;
+        <label for="qrCaptureInput" class="btn-secondary text-xs mt-2 w-full inline-flex justify-center cursor-pointer select-none">
+          <i class="fas fa-camera mr-1"></i>다시 촬영
+        </label>`;
       resultEl.classList.remove('hidden');
-      statusEl.textContent = '인식된 QR 코드가 등록된 자산과 일치하지 않습니다.';
-
-      resultEl.querySelector('#retryScan').addEventListener('click', () => {
-        resultEl.classList.add('hidden');
-        statusEl.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>카메라를 QR 코드에 가져다 대세요';
-        startCamera();
-      });
+      statusEl.textContent = '인식된 코드가 등록된 자산과 일치하지 않습니다.';
     }
   }
 
-  /* 수동 검색 */
+  /* ── 수동 검색 ── */
   root.querySelector('#manualSearchBtn').addEventListener('click', () => {
     const code = root.querySelector('#manualCode').value.trim();
     if (!code) { toast('자산코드를 입력하세요.', 'warning'); return; }
@@ -339,7 +318,7 @@ export async function renderQR(root) {
 
   /* ── 라벨 미리보기 ── */
   function renderPreview() {
-    const selAssets  = assets.filter(a => selected.has(a.id));
+    const selAssets   = assets.filter(a => selected.has(a.id));
     const previewCard = root.querySelector('#previewCard');
     if (!selAssets.length) { previewCard.classList.add('hidden'); return; }
     previewCard.classList.remove('hidden');
