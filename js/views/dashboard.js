@@ -1,6 +1,7 @@
 /* 현황판 — KPI + 차트 + 교차분석 + 4종 필터 */
 import { Assets, MoveRequests } from '../store.js';
 import { isAdmin } from '../auth.js';
+import { ageBadge } from './assets.js';
 
 const FLOORS = ['2층', '3층', '4층', '5층', '6층', '7층'];
 const STATUSES = ['정상', '수리중', '폐기'];
@@ -84,6 +85,10 @@ export async function renderDashboard(root) {
     const disposed = assets.filter(a => a.status === '폐기').length;
     const pending  = requests.filter(r => r.status === '대기').length;
     const thisMonth = monthlyMoves(requests);
+    const aging    = assets.filter(a => {
+      if (!a.acquired_date) return false;
+      return (Date.now() - new Date(a.acquired_date).getTime()) / (365.25 * 24 * 3600 * 1000) >= 5;
+    }).length;
 
     /* 필터 요약 */
     const active = Object.entries(state.filters).filter(([,v])=>v).map(([k,v])=>`${k}:${v}`);
@@ -94,13 +99,14 @@ export async function renderDashboard(root) {
 
     const content = root.querySelector('#dashContent');
     content.innerHTML = `
-      <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+      <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3 mb-6">
         ${kpi('전체 자산',    total,     'fa-boxes-stacked')}
         ${kpi('정상',         ok,        'fa-circle-check')}
         ${kpi('수리중',       repair,    'fa-screwdriver-wrench')}
         ${kpi('폐기',         disposed,  'fa-trash')}
         ${kpi('이동 대기',    pending,   'fa-paper-plane',  pending > 0)}
         ${kpi('이번 달 처리', thisMonth, 'fa-calendar-check')}
+        ${kpi('노후 자산',    aging,     'fa-triangle-exclamation', aging > 0)}
       </div>
 
       <div class="grid lg:grid-cols-2 gap-4 mb-4">
@@ -125,24 +131,24 @@ export async function renderDashboard(root) {
         <div style="height:140px"><canvas id="chartCross"></canvas></div>
       </div>
 
-      <div class="grid lg:grid-cols-3 gap-4 mb-4">
-        <!-- 최근 등록 자산 -->
-        <div class="card lg:col-span-2">
-          <h3 class="font-semibold text-sm mb-2"><i class="fas fa-clock-rotate-left mr-1 text-brand-500"></i>최근 등록 자산</h3>
-          <div class="overflow-x-auto">
-            <table class="tbl text-xs">
-              <thead><tr>
-                <th>자산코드</th><th>자산명</th><th>층</th><th>부서</th><th>상태</th><th>등록일</th>
-              </tr></thead>
-              <tbody>${recentRows(assets)}</tbody>
-            </table>
-          </div>
+      <!-- 최근 등록 자산 -->
+      <div class="card mb-4">
+        <h3 class="font-semibold text-sm mb-2"><i class="fas fa-clock-rotate-left mr-1 text-brand-500"></i>최근 등록 자산</h3>
+        <div class="overflow-x-auto">
+          <table class="tbl text-xs">
+            <thead><tr>
+              <th>자산코드</th><th>자산명</th><th>층</th><th>부서</th><th>상태</th><th>등록일</th>
+            </tr></thead>
+            <tbody>${recentRows(assets)}</tbody>
+          </table>
         </div>
+      </div>
 
-        <!-- 부서별 자산 요약 -->
-        <div class="card">
-          <h3 class="font-semibold text-sm mb-2"><i class="fas fa-building-user mr-1 text-brand-500"></i>부서별 자산</h3>
-          ${deptSummary(assets)}
+      <!-- 부서별 현황 카드 -->
+      <div class="card mb-4">
+        <h3 class="font-semibold text-sm mb-3"><i class="fas fa-building-user mr-1 text-brand-500"></i>부서별 자산 현황</h3>
+        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+          ${deptCards(assets)}
         </div>
       </div>
 
@@ -167,7 +173,8 @@ export async function renderDashboard(root) {
 /* ─── helpers ─── */
 const KPI_CLS = {
   '전체 자산': 'kpi--total', '정상': 'kpi--ok', '수리중': 'kpi--repair',
-  '폐기': 'kpi--disposed', '이동 대기': 'kpi--pending', '이번 달 처리': 'kpi--monthly'
+  '폐기': 'kpi--disposed', '이동 대기': 'kpi--pending', '이번 달 처리': 'kpi--monthly',
+  '노후 자산': 'kpi--pending'
 };
 
 function kpi(label, value, icon, warnDot = false) {
@@ -207,30 +214,47 @@ function statusBadge(s) {
   return `<span class="badge">${s || '-'}</span>`;
 }
 
-const DEPT_COLORS = ['#ef4444','#f97316','#eab308','#22c55e','#3b82f6','#8b5cf6','#ec4899','#14b8a6'];
-
-function deptSummary(assets) {
+function deptCards(assets) {
   const map = new Map();
   for (const a of assets) {
     const k = a.department || '미지정';
-    map.set(k, (map.get(k) || 0) + 1);
+    if (!map.has(k)) map.set(k, { total: 0, ok: 0, repair: 0, disposed: 0 });
+    const d = map.get(k);
+    d.total++;
+    if (a.status === '정상')   d.ok++;
+    else if (a.status === '수리중') d.repair++;
+    else if (a.status === '폐기')   d.disposed++;
   }
-  const sorted = [...map.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
-  const max = sorted[0]?.[1] || 1;
-  if (!sorted.length) return `<p class="text-xs text-slate-400 text-center py-4">데이터 없음</p>`;
-  return sorted.map(([dept, cnt], i) => {
-    const color = DEPT_COLORS[i % DEPT_COLORS.length];
-    return `
-    <div class="mb-1.5">
-      <div class="flex justify-between text-xs mb-0.5">
-        <span class="truncate max-w-[130px]">${dept}</span>
-        <span class="font-bold ml-1" style="color:${color}">${cnt}</span>
-      </div>
-      <div class="h-1.5 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden">
-        <div class="h-full rounded-full" style="width:${Math.round(cnt/max*100)}%;background:${color}"></div>
-      </div>
-    </div>`;
-  }).join('');
+  if (!map.size) return `<p class="text-xs text-slate-400 col-span-full text-center py-4">데이터 없음</p>`;
+
+  return [...map.entries()]
+    .sort((a, b) => b[1].total - a[1].total)
+    .map(([dept, d]) => {
+      const repairRate = d.total > 0 ? Math.round(d.repair / d.total * 100) : 0;
+      const repairColor = repairRate >= 30 ? 'text-red-500' : repairRate >= 15 ? 'text-amber-500' : 'text-slate-400';
+      return `
+        <div class="border border-slate-200 dark:border-slate-700 rounded-xl p-3 hover:shadow-sm transition-shadow">
+          <div class="flex items-start justify-between mb-2">
+            <span class="font-semibold text-xs leading-tight truncate max-w-[90px]" title="${dept}">${dept}</span>
+            <span class="text-xl font-bold text-brand-500 shrink-0 ml-1">${d.total}</span>
+          </div>
+          <div class="flex flex-wrap gap-1 mb-2">
+            <span class="badge badge--ok text-[10px]">정상 ${d.ok}</span>
+            ${d.repair  > 0 ? `<span class="badge badge--repair text-[10px]">수리 ${d.repair}</span>`  : ''}
+            ${d.disposed > 0 ? `<span class="badge badge--disposed text-[10px]">폐기 ${d.disposed}</span>` : ''}
+          </div>
+          ${repairRate > 0 ? `
+          <div>
+            <div class="flex justify-between text-[10px] mb-0.5">
+              <span class="text-slate-400">수리율</span>
+              <span class="font-medium ${repairColor}">${repairRate}%</span>
+            </div>
+            <div class="h-1 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+              <div class="h-1 rounded-full ${repairRate >= 30 ? 'bg-red-400' : 'bg-amber-400'}" style="width:${repairRate}%"></div>
+            </div>
+          </div>` : ''}
+        </div>`;
+    }).join('');
 }
 
 function recentRequests(requests, assets) {

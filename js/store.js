@@ -77,3 +77,11 @@ export const Floorplans = {
   put:    data => put('floorplans', data),
   remove: id   => remove('floorplans', id)
 };
+export const AssetHistory = {
+  list:        ()       => listAll('asset_history'),
+  listByAsset: async id => {
+    const all = await listAll('asset_history');
+    return all.filter(h => h.asset_id === id).sort((a, b) => b.changed_at - a.changed_at);
+  },
+  add: data => add('asset_history', data)
+};

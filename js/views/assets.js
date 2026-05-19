@@ -1,7 +1,41 @@
 /* 자산 검색 / 등록 / 목록 + 상세·수정·폐기 모달 */
-import { Assets } from '../store.js';
+import { Assets, AssetHistory } from '../store.js';
 import { toast } from '../ui/toast.js';
-import { isAdmin } from '../auth.js';
+import { isAdmin, getSession } from '../auth.js';
+
+/* ── 수정 이력 추적 필드 ── */
+const TRACKED_FIELDS = {
+  asset_name: '자산명', item_category: '품목', status: '상태',
+  floor: '층', room: '실', department: '담당부서', manager: '담당자',
+  acquired_date: '취득일자', note: '비고',
+  disposed_at: '폐기일자', disposal_reason: '폐기사유'
+};
+
+async function logChange(oldAsset, newAsset, type = '수정') {
+  const session = getSession();
+  const changes = Object.entries(TRACKED_FIELDS)
+    .filter(([k]) => (oldAsset[k] || '') !== (newAsset[k] || ''))
+    .map(([k, label]) => ({ field: k, label, old: oldAsset[k] || '-', new: newAsset[k] || '-' }));
+  if (!changes.length) return;
+  await AssetHistory.add({
+    asset_id:        oldAsset.id,
+    asset_code:      oldAsset.asset_code,
+    changed_by:      session?.adminId   || '알수없음',
+    changed_by_name: session?.adminName || '알수없음',
+    changed_at:      Date.now(),
+    change_type:     type,
+    changes
+  });
+}
+
+/* ── 노후 경고 배지 ── */
+export function ageBadge(acquired_date) {
+  if (!acquired_date) return '';
+  const yrs = (Date.now() - new Date(acquired_date).getTime()) / (365.25 * 24 * 3600 * 1000);
+  if (yrs >= 7) return `<span class="badge badge--disposed text-[10px] ml-1" title="${Math.floor(yrs)}년 경과"><i class="fas fa-triangle-exclamation mr-0.5"></i>${Math.floor(yrs)}년</span>`;
+  if (yrs >= 5) return `<span class="badge badge--repair text-[10px] ml-1" title="${Math.floor(yrs)}년 경과"><i class="fas fa-clock mr-0.5"></i>${Math.floor(yrs)}년</span>`;
+  return '';
+}
 
 const STATUS_OPTS = ['정상', '수리중', '폐기'];
 const FLOORS = ['2층', '3층', '4층', '5층', '6층', '7층'];
@@ -60,23 +94,91 @@ export async function openAssetDetail(assetId, afterAction) {
   if (!modal) return;
 
   modal.querySelector('#detailBody').innerHTML = `
-    <div class="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
-      <div><span class="detail-label">자산코드</span><span class="detail-val font-mono">${a.asset_code || '-'}</span></div>
-      <div><span class="detail-label">자산명</span><span class="detail-val">${a.asset_name || '-'}</span></div>
-      <div><span class="detail-label">품목</span><span class="detail-val">${a.item_category || '-'}</span></div>
-      <div><span class="detail-label">상태</span><span class="detail-val">${badge(a.status)}</span></div>
-      <div><span class="detail-label">층</span><span class="detail-val">${a.floor || '-'}</span></div>
-      <div><span class="detail-label">실</span><span class="detail-val">${a.room || '-'}</span></div>
-      <div><span class="detail-label">담당부서</span><span class="detail-val">${a.department || '-'}</span></div>
-      <div><span class="detail-label">담당자</span><span class="detail-val">${a.manager || '-'}</span></div>
-      <div><span class="detail-label">취득일자</span><span class="detail-val">${a.acquired_date || '-'}</span></div>
-      <div><span class="detail-label">등록일</span><span class="detail-val">${a.createdAt ? new Date(a.createdAt).toLocaleDateString('ko') : '-'}</span></div>
-      ${a.disposed_at ? `<div><span class="detail-label">폐기일자</span><span class="detail-val text-red-500">${a.disposed_at}</span></div>` : ''}
-      ${a.disposal_reason ? `<div class="col-span-2"><span class="detail-label">폐기사유</span><span class="detail-val">${a.disposal_reason}</span></div>` : ''}
-      ${a.note ? `<div class="col-span-2"><span class="detail-label">비고</span><span class="detail-val">${a.note}</span></div>` : ''}
-      ${(a.pos_x != null && a.pos_x !== 0) ? `<div><span class="detail-label">핀 위치</span><span class="detail-val text-xs font-mono">X:${Number(a.pos_x).toFixed(1)}% Y:${Number(a.pos_y).toFixed(1)}%</span></div>` : ''}
+    <!-- 탭 -->
+    <div class="flex gap-1 mb-4 border-b border-slate-200 dark:border-slate-700">
+      <button id="tabInfo"    class="detail-tab detail-tab--active px-4 py-2 text-sm font-medium">상세 정보</button>
+      <button id="tabHistory" class="detail-tab px-4 py-2 text-sm font-medium text-slate-500 hover:text-slate-700 dark:hover:text-slate-300">수정 이력</button>
+    </div>
+
+    <!-- 상세 정보 패널 -->
+    <div id="panelInfo">
+      <div class="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
+        <div><span class="detail-label">자산코드</span><span class="detail-val font-mono">${a.asset_code || '-'}</span></div>
+        <div><span class="detail-label">자산명</span><span class="detail-val">${a.asset_name || '-'}</span></div>
+        <div><span class="detail-label">품목</span><span class="detail-val">${a.item_category || '-'}</span></div>
+        <div><span class="detail-label">상태</span><span class="detail-val">${badge(a.status)}</span></div>
+        <div><span class="detail-label">층</span><span class="detail-val">${a.floor || '-'}</span></div>
+        <div><span class="detail-label">실</span><span class="detail-val">${a.room || '-'}</span></div>
+        <div><span class="detail-label">담당부서</span><span class="detail-val">${a.department || '-'}</span></div>
+        <div><span class="detail-label">담당자</span><span class="detail-val">${a.manager || '-'}</span></div>
+        <div><span class="detail-label">취득일자</span><span class="detail-val">${a.acquired_date || '-'}${ageBadge(a.acquired_date)}</span></div>
+        <div><span class="detail-label">등록일</span><span class="detail-val">${a.createdAt ? new Date(a.createdAt).toLocaleDateString('ko') : '-'}</span></div>
+        ${a.maker ? `<div><span class="detail-label">제조사</span><span class="detail-val">${a.maker}</span></div>` : ''}
+        ${a.model ? `<div><span class="detail-label">모델명</span><span class="detail-val">${a.model}</span></div>` : ''}
+        ${a.serial ? `<div class="col-span-2"><span class="detail-label">시리얼번호</span><span class="detail-val font-mono text-xs">${a.serial}</span></div>` : ''}
+        ${a.disposed_at ? `<div><span class="detail-label">폐기일자</span><span class="detail-val text-red-500">${a.disposed_at}</span></div>` : ''}
+        ${a.disposal_reason ? `<div class="col-span-2"><span class="detail-label">폐기사유</span><span class="detail-val">${a.disposal_reason}</span></div>` : ''}
+        ${a.note ? `<div class="col-span-2"><span class="detail-label">비고</span><span class="detail-val">${a.note}</span></div>` : ''}
+        ${(a.pos_x != null && a.pos_x !== 0) ? `<div><span class="detail-label">핀 위치</span><span class="detail-val text-xs font-mono">X:${Number(a.pos_x).toFixed(1)}% Y:${Number(a.pos_y).toFixed(1)}%</span></div>` : ''}
+      </div>
+    </div>
+
+    <!-- 수정 이력 패널 -->
+    <div id="panelHistory" class="hidden">
+      <div id="historyList" class="space-y-2 text-sm">
+        <p class="text-slate-400 text-center py-6"><i class="fas fa-spinner fa-spin mr-1"></i>이력 로딩 중...</p>
+      </div>
     </div>
   `;
+
+  /* 탭 전환 */
+  const tabInfo    = modal.querySelector('#tabInfo');
+  const tabHistory = modal.querySelector('#tabHistory');
+  const panelInfo    = modal.querySelector('#panelInfo');
+  const panelHistory = modal.querySelector('#panelHistory');
+
+  tabInfo.addEventListener('click', () => {
+    tabInfo.classList.add('detail-tab--active');
+    tabHistory.classList.remove('detail-tab--active');
+    tabHistory.classList.add('text-slate-500');
+    panelInfo.classList.remove('hidden');
+    panelHistory.classList.add('hidden');
+  });
+
+  tabHistory.addEventListener('click', async () => {
+    tabHistory.classList.add('detail-tab--active');
+    tabHistory.classList.remove('text-slate-500');
+    tabInfo.classList.remove('detail-tab--active');
+    tabInfo.classList.add('text-slate-500');
+    panelHistory.classList.remove('hidden');
+    panelInfo.classList.add('hidden');
+
+    const logs = await AssetHistory.listByAsset(assetId);
+    const listEl = modal.querySelector('#historyList');
+    if (!logs.length) {
+      listEl.innerHTML = `<p class="text-slate-400 text-center py-6">수정 이력이 없습니다.</p>`;
+      return;
+    }
+    listEl.innerHTML = logs.map(log => `
+      <div class="border border-slate-200 dark:border-slate-700 rounded-lg p-3">
+        <div class="flex items-center justify-between mb-2">
+          <span class="font-medium text-xs">
+            <i class="fas fa-user-pen mr-1 text-brand-500"></i>${log.changed_by_name}
+            <span class="text-slate-400 ml-1">(${log.changed_by})</span>
+          </span>
+          <span class="text-[11px] text-slate-400">${new Date(log.changed_at).toLocaleString('ko')}</span>
+        </div>
+        <div class="space-y-1">
+          ${log.changes.map(c => `
+            <div class="flex items-center gap-2 text-xs">
+              <span class="font-medium text-slate-600 dark:text-slate-400 w-16 shrink-0">${c.label}</span>
+              <span class="text-slate-400 line-through">${c.old}</span>
+              <i class="fas fa-arrow-right text-slate-300 text-[10px]"></i>
+              <span class="text-slate-800 dark:text-slate-200 font-medium">${c.new}</span>
+            </div>`).join('')}
+        </div>
+      </div>`).join('');
+  });
 
   const editBtn = modal.querySelector('#detailEditBtn');
   const dispBtn = modal.querySelector('#detailDisposalBtn');
@@ -153,7 +255,9 @@ export async function openAssetEdit(assetId, afterAction) {
   form.onsubmit = async e => {
     e.preventDefault();
     const patch = Object.fromEntries(new FormData(e.target));
-    await Assets.put({ ...a, ...patch });
+    const updated = { ...a, ...patch };
+    await Assets.put(updated);
+    await logChange(a, updated, '수정');
     toast('자산 정보가 수정되었습니다.', 'success');
     closeModal('assetEditModal');
     if (afterAction) afterAction();
@@ -186,7 +290,9 @@ export async function openAssetDisposal(assetId, afterAction) {
     e.preventDefault();
     const disposed_at = modal.querySelector('#disposalDate').value;
     const disposal_reason = modal.querySelector('#disposalReason').value.trim();
-    await Assets.put({ ...a, status: '폐기', disposed_at, disposal_reason });
+    const updated = { ...a, status: '폐기', disposed_at, disposal_reason };
+    await Assets.put(updated);
+    await logChange(a, updated, '폐기');
     toast(`${a.asset_name} 폐기 처리되었습니다.`, 'success');
     closeModal('assetDisposalModal');
     if (afterAction) afterAction();
@@ -464,7 +570,7 @@ export async function renderAssetList(root) {
     body.innerHTML = pageItems.length ? pageItems.map(a => `
       <tr class="cursor-pointer" data-id="${a.id}">
         <td class="font-mono text-xs">${a.asset_code}</td>
-        <td>${a.asset_name}</td>
+        <td>${a.asset_name}${ageBadge(a.acquired_date)}</td>
         <td>${a.item_category}</td>
         <td>${a.floor}</td>
         <td>${a.department}</td>

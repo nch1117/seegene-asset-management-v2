@@ -151,6 +151,20 @@
   margin-top: 0.75rem;
 }
 
+/* ─── 상세 모달 탭 ─── */
+.detail-tab {
+  border-bottom: 2px solid transparent;
+  transition: border-color .15s, color .15s;
+}
+.detail-tab--active {
+  border-bottom-color: rgb(239 68 68);
+  color: rgb(239 68 68);
+  font-weight: 600;
+}
+.detail-tab:not(.detail-tab--active):hover {
+  color: rgb(100 116 139);
+}
+
 /* ─── 카드 ─── */
 .card {
   background: white;
