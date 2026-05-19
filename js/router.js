@@ -77,7 +77,7 @@ export function handleRoute() {
 
   // 사이드바 active
   document.querySelectorAll('.side-link').forEach(a => {
-    a.classList.toggle('active', a.dataset.route === hash);
+    a.classList.toggle('active', a.dataset.route === routeName);
   });
 }
 
