@@ -395,14 +395,25 @@ function generateQR(a, urlMode, containerId) {
     : a.asset_code;
 
   el.innerHTML = '';
-  const canvas = document.createElement('canvas');
-  el.appendChild(canvas);
 
-  if (typeof QRCode !== 'undefined' && QRCode.toCanvas) {
-    QRCode.toCanvas(canvas, text, { width: 90, margin: 1, color: { dark: '#0f172a', light: '#ffffff' } }, err => {
-      if (err) el.innerHTML = '<span class="text-xs text-red-400">QR 오류</span>';
+  if (typeof QRCode === 'undefined') {
+    el.innerHTML = '<span class="text-xs text-red-400">QR 라이브러리 로드 실패</span>';
+    return;
+  }
+
+  try {
+    new QRCode(el, {
+      text,
+      width: 90,
+      height: 90,
+      colorDark: '#0f172a',
+      colorLight: '#ffffff',
+      correctLevel: QRCode.CorrectLevel.M
     });
-  } else {
-    el.innerHTML = '<span class="text-xs text-slate-400">로딩 중...</span>';
+    /* qrcodejs는 img+canvas를 모두 추가하므로 canvas만 남김 */
+    const img = el.querySelector('img');
+    if (img) img.remove();
+  } catch (e) {
+    el.innerHTML = '<span class="text-xs text-red-400">QR 생성 오류</span>';
   }
 }
