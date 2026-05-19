@@ -806,6 +806,11 @@ body.role-dept  .dept-only-block  { display: block; }
 .dark .qr-label__name { color: rgb(241 245 249); }
 
 @media print {
+/* ─── 보고서 탭 ─── */
+.report-tab { padding: 0.75rem 1rem; font-size: 0.875rem; font-weight: 500; transition: color .15s, border-color .15s; border-bottom: 2px solid transparent; }
+.report-tab--active { border-bottom-color: rgb(239 68 68); color: rgb(239 68 68); font-weight: 600; }
+.report-tab:not(.report-tab--active):hover { color: rgb(100 116 139); }
+
   body > *:not(#printArea) { display: none !important; }
   #printArea {
     display: block !important;

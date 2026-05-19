@@ -34,6 +34,8 @@ const MENU = [
   { route: 'excelUpload', label: '일괄 업로드',  icon: 'fa-file-excel',         adminOnly: true },
   { route: 'qr',          label: 'QR 라벨',      icon: 'fa-qrcode',             adminOnly: true },
   { route: 'disposal',    label: '폐기 자산 대장', icon: 'fa-trash-can',         adminOnly: true },
+  { route: 'repair',      label: '수리 이력',      icon: 'fa-wrench',             adminOnly: true },
+  { route: 'report',      label: '보고서',          icon: 'fa-chart-bar',          adminOnly: true },
   { route: 'settings',    label: '설정',          icon: 'fa-gear',               adminOnly: true },
   { section: '도움말' },
   { route: 'guide',       label: '사용 가이드',  icon: 'fa-circle-question' }

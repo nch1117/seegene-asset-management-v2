@@ -232,8 +232,10 @@
         <button id="detailCloseBtn" class="text-slate-400 hover:text-slate-600 text-xl leading-none">&times;</button>
       </div>
       <div id="detailBody" class="px-6 py-5"></div>
-      <div class="flex justify-end gap-2 px-6 py-4 border-t border-slate-200 dark:border-slate-700">
+      <div class="flex justify-end gap-2 px-6 py-4 border-t border-slate-200 dark:border-slate-700 flex-wrap">
         <button id="detailDisposalBtn" class="btn-secondary text-amber-600 hover:bg-amber-50 hidden"><i class="fas fa-trash-can mr-1"></i>폐기 처리</button>
+        <button id="detailRepairCompleteBtn" class="btn-secondary text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 hidden"><i class="fas fa-check mr-1"></i>수리 완료</button>
+        <button id="detailRepairBtn" class="btn-secondary text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 hidden"><i class="fas fa-wrench mr-1"></i>수리 접수</button>
         <button id="detailEditBtn" class="btn-secondary hidden"><i class="fas fa-pen mr-1"></i>수정</button>
         <button id="detailCloseBtn2" class="btn-primary" onclick="document.getElementById('assetDetailModal').classList.add('hidden');document.body.style.overflow=''">닫기</button>
       </div>
@@ -280,6 +282,74 @@
         <div class="flex gap-2 pt-1">
           <button type="button" id="disposalCancelBtn" class="flex-1 btn-secondary">취소</button>
           <button type="submit" class="flex-1 btn-primary bg-amber-500 hover:bg-amber-600"><i class="fas fa-trash-can mr-1"></i>폐기 확정</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ───── 수리 접수 모달 ───── -->
+  <div id="repairModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+    <div class="w-full max-w-md bg-white dark:bg-slate-800 rounded-2xl shadow-2xl overflow-hidden">
+      <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+        <h3 class="font-bold text-base"><i class="fas fa-wrench mr-2 text-blue-500"></i>수리 접수</h3>
+        <button id="repairCloseBtn" class="text-slate-400 hover:text-slate-600 text-xl leading-none">&times;</button>
+      </div>
+      <form id="repairForm" class="px-6 py-5 space-y-4">
+        <div class="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800 text-sm">
+          <i class="fas fa-wrench text-blue-500 mr-1"></i>
+          <span id="repairAssetName" class="font-semibold"></span>을(를) 수리 접수합니다.
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm mb-1">접수일 <span class="text-red-500">*</span></label>
+            <input id="repairDate" type="date" class="input" required />
+          </div>
+          <div>
+            <label class="block text-sm mb-1">수리 업체</label>
+            <input id="repairVendor" type="text" class="input" placeholder="업체명" />
+          </div>
+        </div>
+        <div>
+          <label class="block text-sm mb-1">증상 / 수리 내용</label>
+          <textarea id="repairDesc" class="input" rows="3" placeholder="증상 또는 수리 내용을 입력하세요..."></textarea>
+        </div>
+        <div class="flex gap-2 pt-1">
+          <button type="button" id="repairCancelBtn" class="flex-1 btn-secondary">취소</button>
+          <button type="submit" class="flex-1 btn-primary" style="background:#3b82f6"><i class="fas fa-wrench mr-1"></i>접수</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ───── 수리 완료 모달 ───── -->
+  <div id="repairCompleteModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+    <div class="w-full max-w-md bg-white dark:bg-slate-800 rounded-2xl shadow-2xl overflow-hidden">
+      <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+        <h3 class="font-bold text-base"><i class="fas fa-check-circle mr-2 text-green-500"></i>수리 완료</h3>
+        <button id="repairCompleteCloseBtn" class="text-slate-400 hover:text-slate-600 text-xl leading-none">&times;</button>
+      </div>
+      <form id="repairCompleteForm" class="px-6 py-5 space-y-4">
+        <div class="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800 text-sm">
+          <i class="fas fa-check-circle text-green-500 mr-1"></i>
+          <span id="repairCompleteAssetName" class="font-semibold"></span> 수리 완료 처리합니다.
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm mb-1">완료일 <span class="text-red-500">*</span></label>
+            <input id="repairCompleteDate" type="date" class="input" required />
+          </div>
+          <div>
+            <label class="block text-sm mb-1">수리 비용 (원)</label>
+            <input id="repairCost" type="number" class="input" placeholder="0" min="0" />
+          </div>
+        </div>
+        <div>
+          <label class="block text-sm mb-1">결과 비고</label>
+          <textarea id="repairResultNote" class="input" rows="2" placeholder="수리 결과 또는 특이사항"></textarea>
+        </div>
+        <div class="flex gap-2 pt-1">
+          <button type="button" id="repairCompleteCancelBtn" class="flex-1 btn-secondary">취소</button>
+          <button type="submit" class="flex-1 btn-primary bg-green-500 hover:bg-green-600"><i class="fas fa-check mr-1"></i>완료 처리</button>
         </div>
       </form>
     </div>

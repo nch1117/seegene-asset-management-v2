@@ -85,3 +85,12 @@ export const AssetHistory = {
   },
   add: data => add('asset_history', data)
 };
+export const RepairHistory = {
+  list:        ()   => listAll('repair_history'),
+  listByAsset: async id => {
+    const all = await listAll('repair_history');
+    return all.filter(h => h.asset_id === id).sort((a, b) => b.reported_at - a.reported_at);
+  },
+  add:  data => add('repair_history', data),
+  put:  data => put('repair_history', data)
+};

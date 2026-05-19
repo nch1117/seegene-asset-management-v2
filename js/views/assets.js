@@ -1,5 +1,5 @@
 /* 자산 검색 / 등록 / 목록 + 상세·수정·폐기 모달 */
-import { Assets, AssetHistory } from '../store.js';
+import { Assets, AssetHistory, RepairHistory } from '../store.js';
 import { toast } from '../ui/toast.js';
 import { isAdmin, getSession } from '../auth.js';
 
@@ -98,6 +98,7 @@ export async function openAssetDetail(assetId, afterAction) {
     <div class="flex gap-1 mb-4 border-b border-slate-200 dark:border-slate-700">
       <button id="tabInfo"    class="detail-tab detail-tab--active px-4 py-2 text-sm font-medium">상세 정보</button>
       <button id="tabHistory" class="detail-tab px-4 py-2 text-sm font-medium text-slate-500 hover:text-slate-700 dark:hover:text-slate-300">수정 이력</button>
+      <button id="tabRepair"  class="detail-tab px-4 py-2 text-sm font-medium text-slate-500 hover:text-slate-700 dark:hover:text-slate-300">수리 이력</button>
     </div>
 
     <!-- 상세 정보 패널 -->
@@ -129,43 +130,37 @@ export async function openAssetDetail(assetId, afterAction) {
         <p class="text-slate-400 text-center py-6"><i class="fas fa-spinner fa-spin mr-1"></i>이력 로딩 중...</p>
       </div>
     </div>
+
+    <!-- 수리 이력 패널 -->
+    <div id="panelRepair" class="hidden">
+      <div id="repairList" class="space-y-2 text-sm">
+        <p class="text-slate-400 text-center py-6"><i class="fas fa-spinner fa-spin mr-1"></i>이력 로딩 중...</p>
+      </div>
+    </div>
   `;
 
-  /* 탭 전환 */
-  const tabInfo    = modal.querySelector('#tabInfo');
-  const tabHistory = modal.querySelector('#tabHistory');
-  const panelInfo    = modal.querySelector('#panelInfo');
-  const panelHistory = modal.querySelector('#panelHistory');
+  /* ── 탭 전환 헬퍼 ── */
+  const tabs   = ['tabInfo', 'tabHistory', 'tabRepair'].map(id => modal.querySelector('#' + id));
+  const panels = ['panelInfo', 'panelHistory', 'panelRepair'].map(id => modal.querySelector('#' + id));
+  function activateTab(idx) {
+    tabs.forEach((t, i) => {
+      t.classList.toggle('detail-tab--active', i === idx);
+      t.classList.toggle('text-slate-500', i !== idx);
+    });
+    panels.forEach((p, i) => p.classList.toggle('hidden', i !== idx));
+  }
 
-  tabInfo.addEventListener('click', () => {
-    tabInfo.classList.add('detail-tab--active');
-    tabHistory.classList.remove('detail-tab--active');
-    tabHistory.classList.add('text-slate-500');
-    panelInfo.classList.remove('hidden');
-    panelHistory.classList.add('hidden');
-  });
+  tabs[0].addEventListener('click', () => activateTab(0));
 
-  tabHistory.addEventListener('click', async () => {
-    tabHistory.classList.add('detail-tab--active');
-    tabHistory.classList.remove('text-slate-500');
-    tabInfo.classList.remove('detail-tab--active');
-    tabInfo.classList.add('text-slate-500');
-    panelHistory.classList.remove('hidden');
-    panelInfo.classList.add('hidden');
-
+  tabs[1].addEventListener('click', async () => {
+    activateTab(1);
     const logs = await AssetHistory.listByAsset(assetId);
     const listEl = modal.querySelector('#historyList');
-    if (!logs.length) {
-      listEl.innerHTML = `<p class="text-slate-400 text-center py-6">수정 이력이 없습니다.</p>`;
-      return;
-    }
+    if (!logs.length) { listEl.innerHTML = `<p class="text-slate-400 text-center py-6">수정 이력이 없습니다.</p>`; return; }
     listEl.innerHTML = logs.map(log => `
       <div class="border border-slate-200 dark:border-slate-700 rounded-lg p-3">
         <div class="flex items-center justify-between mb-2">
-          <span class="font-medium text-xs">
-            <i class="fas fa-user-pen mr-1 text-brand-500"></i>${log.changed_by_name}
-            <span class="text-slate-400 ml-1">(${log.changed_by})</span>
-          </span>
+          <span class="font-medium text-xs"><i class="fas fa-user-pen mr-1 text-brand-500"></i>${log.changed_by_name} <span class="text-slate-400">(${log.changed_by})</span></span>
           <span class="text-[11px] text-slate-400">${new Date(log.changed_at).toLocaleString('ko')}</span>
         </div>
         <div class="space-y-1">
@@ -180,10 +175,36 @@ export async function openAssetDetail(assetId, afterAction) {
       </div>`).join('');
   });
 
+  tabs[2].addEventListener('click', async () => {
+    activateTab(2);
+    const repairs = await RepairHistory.listByAsset(assetId);
+    const listEl = modal.querySelector('#repairList');
+    if (!repairs.length) { listEl.innerHTML = `<p class="text-slate-400 text-center py-6">수리 이력이 없습니다.</p>`; return; }
+    listEl.innerHTML = repairs.map(r => `
+      <div class="border border-slate-200 dark:border-slate-700 rounded-lg p-3">
+        <div class="flex items-center justify-between mb-2">
+          <span class="font-medium text-xs">
+            <i class="fas fa-wrench mr-1 text-blue-500"></i>${new Date(r.reported_at).toLocaleDateString('ko')} 접수
+            ${r.vendor ? `<span class="text-slate-400 ml-1">— ${r.vendor}</span>` : ''}
+          </span>
+          <span class="badge ${r.status === '완료' ? 'badge--ok' : 'badge--repair'} text-[10px]">${r.status}</span>
+        </div>
+        ${r.description ? `<p class="text-xs text-slate-600 dark:text-slate-300 mb-1">${r.description}</p>` : ''}
+        ${r.completed_at ? `<p class="text-xs text-slate-400">완료: ${new Date(r.completed_at).toLocaleDateString('ko')}${r.cost ? ' · ' + r.cost.toLocaleString() + '원' : ''}</p>` : ''}
+        ${r.result_note ? `<p class="text-xs text-slate-400 mt-0.5">${r.result_note}</p>` : ''}
+      </div>`).join('');
+  });
+
+  /* ── 버튼 ── */
   const editBtn = modal.querySelector('#detailEditBtn');
   const dispBtn = modal.querySelector('#detailDisposalBtn');
+  const repairBtn = modal.querySelector('#detailRepairBtn');
+  const repairCompleteBtn = modal.querySelector('#detailRepairCompleteBtn');
+
   if (editBtn) { editBtn.classList.toggle('hidden', !admin); editBtn.onclick = () => { closeModal('assetDetailModal'); openAssetEdit(assetId, afterAction); }; }
   if (dispBtn) { dispBtn.classList.toggle('hidden', !admin || a.status === '폐기'); dispBtn.onclick = () => { closeModal('assetDetailModal'); openAssetDisposal(assetId, afterAction); }; }
+  if (repairBtn) { repairBtn.classList.toggle('hidden', !admin || a.status === '수리중' || a.status === '폐기'); repairBtn.onclick = () => { closeModal('assetDetailModal'); openRepairForm(assetId, afterAction); }; }
+  if (repairCompleteBtn) { repairCompleteBtn.classList.toggle('hidden', !admin || a.status !== '수리중'); repairCompleteBtn.onclick = () => { closeModal('assetDetailModal'); openRepairCompleteForm(assetId, afterAction); }; }
 
   const closeBtn = modal.querySelector('#detailCloseBtn');
   if (closeBtn) closeBtn.onclick = () => closeModal('assetDetailModal');
@@ -305,6 +326,89 @@ export async function openAssetDisposal(assetId, afterAction) {
   modal.onclick = e => { if (e.target === modal) closeModal('assetDisposalModal'); };
 
   openModal('assetDisposalModal');
+}
+
+/* ─────────────────────────────────────────
+   수리 접수 모달
+───────────────────────────────────────── */
+export async function openRepairForm(assetId, afterAction) {
+  const a = await Assets.get(assetId);
+  if (!a || !isAdmin()) return;
+
+  document.getElementById('repairAssetName').textContent = `[${a.asset_code}] ${a.asset_name}`;
+  document.getElementById('repairDate').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('repairVendor').value = '';
+  document.getElementById('repairDesc').value = '';
+
+  const form = document.getElementById('repairForm');
+  const handler = async e => {
+    e.preventDefault();
+    form.removeEventListener('submit', handler);
+    const record = {
+      asset_id:    a.id,
+      asset_code:  a.asset_code,
+      asset_name:  a.asset_name,
+      department:  a.department,
+      reported_at: new Date(document.getElementById('repairDate').value).getTime(),
+      vendor:      document.getElementById('repairVendor').value.trim(),
+      description: document.getElementById('repairDesc').value.trim(),
+      status:      '진행중'
+    };
+    await RepairHistory.add(record);
+    const updated = { ...a, status: '수리중' };
+    await Assets.put(updated);
+    await logChange(a, updated, '수리접수');
+    toast('수리가 접수되었습니다.', 'success');
+    closeModal('repairModal');
+    if (afterAction) afterAction();
+  };
+  form.addEventListener('submit', handler);
+
+  document.getElementById('repairCloseBtn').onclick  = () => { closeModal('repairModal'); form.removeEventListener('submit', handler); };
+  document.getElementById('repairCancelBtn').onclick = () => { closeModal('repairModal'); form.removeEventListener('submit', handler); };
+  openModal('repairModal');
+}
+
+/* ─────────────────────────────────────────
+   수리 완료 모달
+───────────────────────────────────────── */
+export async function openRepairCompleteForm(assetId, afterAction) {
+  const a = await Assets.get(assetId);
+  if (!a || !isAdmin()) return;
+
+  const repairs = await RepairHistory.listByAsset(assetId);
+  const active  = repairs.find(r => r.status === '진행중');
+
+  document.getElementById('repairCompleteAssetName').textContent = `[${a.asset_code}] ${a.asset_name}`;
+  document.getElementById('repairCompleteDate').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('repairCost').value = '';
+  document.getElementById('repairResultNote').value = '';
+
+  const form = document.getElementById('repairCompleteForm');
+  const handler = async e => {
+    e.preventDefault();
+    form.removeEventListener('submit', handler);
+    const completedAt = new Date(document.getElementById('repairCompleteDate').value).getTime();
+    const cost        = parseInt(document.getElementById('repairCost').value) || 0;
+    const resultNote  = document.getElementById('repairResultNote').value.trim();
+
+    if (active) {
+      await RepairHistory.put({ ...active, completed_at: completedAt, cost, result_note: resultNote, status: '완료' });
+    } else {
+      await RepairHistory.add({ asset_id: a.id, asset_code: a.asset_code, asset_name: a.asset_name, department: a.department, reported_at: completedAt, completed_at: completedAt, cost, result_note: resultNote, status: '완료' });
+    }
+    const updated = { ...a, status: '정상' };
+    await Assets.put(updated);
+    await logChange(a, updated, '수리완료');
+    toast('수리 완료 처리되었습니다.', 'success');
+    closeModal('repairCompleteModal');
+    if (afterAction) afterAction();
+  };
+  form.addEventListener('submit', handler);
+
+  document.getElementById('repairCompleteCloseBtn').onclick  = () => { closeModal('repairCompleteModal'); form.removeEventListener('submit', handler); };
+  document.getElementById('repairCompleteCancelBtn').onclick = () => { closeModal('repairCompleteModal'); form.removeEventListener('submit', handler); };
+  openModal('repairCompleteModal');
 }
 
 /* ═══════════════════════════════════════════════════

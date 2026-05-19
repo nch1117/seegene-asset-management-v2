@@ -9,6 +9,8 @@ import { renderFloorplan } from './views/floorplan.js';
 import { renderExcelUpload } from './views/excel-upload.js';
 import { renderQR } from './views/qr.js';
 import { renderDisposal } from './views/disposal.js';
+import { renderRepair } from './views/repair.js';
+import { renderReport } from './views/report.js';
 import { renderSettings } from './views/settings.js';
 import { renderGuide } from './views/guide.js';
 
@@ -27,6 +29,8 @@ const ROUTES = {
   excelUpload:      { title: '자산 일괄 업로드', render: renderExcelUpload,      admin: true  },
   qr:               { title: 'QR 라벨',          render: renderQR,               admin: true  },
   disposal:         { title: '폐기 자산 대장',    render: renderDisposal,         admin: true  },
+  repair:           { title: '수리 이력',          render: renderRepair,           admin: true  },
+  report:           { title: '보고서',             render: renderReport,           admin: true  },
   settings:         { title: '설정',              render: renderSettings,         admin: true  }
 };
 
