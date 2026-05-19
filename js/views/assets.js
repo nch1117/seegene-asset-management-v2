@@ -204,7 +204,7 @@ export async function openAssetDisposal(assetId, afterAction) {
 /* ═══════════════════════════════════════════════════
    자산 검색 (공통)
 ═══════════════════════════════════════════════════ */
-export async function renderAssetSearch(root) {
+export async function renderAssetSearch(root, params) {
   const assets = await Assets.list();
   root.innerHTML = `
     <div class="card mb-4">
@@ -268,6 +268,12 @@ export async function renderAssetSearch(root) {
   ['qText', 'qFloor', 'qStatus'].forEach(id =>
     root.querySelector('#' + id).addEventListener('input', renderRows)
   );
+
+  /* QR 스캔 또는 URL params로 자동 검색 */
+  const initCode = params instanceof URLSearchParams ? params.get('code') : null;
+  if (initCode) {
+    root.querySelector('#qText').value = initCode;
+  }
   renderRows();
 }
 

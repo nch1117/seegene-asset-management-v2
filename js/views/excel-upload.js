@@ -3,14 +3,25 @@ import { Assets } from '../store.js';
 import { toast } from '../ui/toast.js';
 
 const REQUIRED  = ['자산명', '품목', '층', '담당부서'];
-const OPTIONAL  = ['담당자', '취득일자'];
+const OPTIONAL  = ['담당자', '취득일자', '제조사', '모델명', '시리얼번호'];
 const STATUS_OK = ['정상', '수리중', '폐기'];
 const FLOORS    = ['2층', '3층', '4층', '5층', '6층', '7층'];
+const DATE_RE   = /^\d{4}-\d{2}-\d{2}$/;
 
 const FIELD_MAP = {
-  '자산코드': 'asset_code', '자산명': 'asset_name', '품목': 'item_category',
-  '층': 'floor', '실': 'room', '담당부서': 'department', '담당자': 'manager',
-  '취득일자': 'acquired_date', '상태': 'status', '비고': 'note'
+  '자산코드':   'asset_code',
+  '자산명':     'asset_name',
+  '품목':       'item_category',
+  '층':         'floor',
+  '실':         'room',
+  '담당부서':   'department',
+  '담당자':     'manager',
+  '취득일자':   'acquired_date',
+  '상태':       'status',
+  '제조사':     'maker',
+  '모델명':     'model',
+  '시리얼번호': 'serial',
+  '비고':       'note'
 };
 
 const CAT_PREFIX = {
@@ -19,15 +30,18 @@ const CAT_PREFIX = {
   '냉장고':'RF','에어컨':'AC','전화기':'PH','태블릿':'TB','카메라':'CM'
 };
 
-function genCode(cat, seq, existCodes) {
+function genCode(cat, existCodes) {
   const prefix = CAT_PREFIX[cat] || cat.slice(0, 2).toUpperCase();
-  const today = new Date();
+  const today  = new Date();
   const yymmdd = String(today.getFullYear()).slice(2)
-    + String(today.getMonth()+1).padStart(2,'0')
-    + String(today.getDate()).padStart(2,'0');
-  let code = `${prefix}-${yymmdd}-${String(seq).padStart(4,'0')}`;
-  let i = seq;
-  while (existCodes.has(code)) { i++; code = `${prefix}-${yymmdd}-${String(i).padStart(4,'0')}`; }
+    + String(today.getMonth() + 1).padStart(2, '0')
+    + String(today.getDate()).padStart(2, '0');
+  let seq = 1;
+  let code = `${prefix}-${yymmdd}-${String(seq).padStart(4, '0')}`;
+  while (existCodes.has(code)) {
+    seq++;
+    code = `${prefix}-${yymmdd}-${String(seq).padStart(4, '0')}`;
+  }
   existCodes.add(code);
   return code;
 }
@@ -44,7 +58,7 @@ export async function renderExcelUpload(root) {
         <div id="uploadZone" class="upload-zone">
           <i class="fas fa-cloud-upload-alt"></i>
           <p class="font-semibold text-slate-600 dark:text-slate-300">엑셀 파일을 드래그하거나 클릭하여 선택</p>
-          <small class="text-slate-400">.xlsx / .xls 지원 · 첫 행은 헤더(자산명, 품목, 층, 담당부서 필수)</small>
+          <small class="text-slate-400">.xlsx / .xls 지원 · 필수 컬럼: 자산명, 품목, 층, 담당부서</small>
           <input id="xlsxInput" type="file" accept=".xlsx,.xls" class="hidden" />
         </div>
       </div>
@@ -53,15 +67,13 @@ export async function renderExcelUpload(root) {
         <div class="card">
           <div class="flex items-center gap-2 flex-wrap mb-3">
             <span class="font-semibold text-sm">검증 결과:</span>
-            <span id="kpiOk"  class="upload-kpi upload-kpi--ok"><i class="fas fa-check mr-1"></i><span id="cntOk">0</span>건 정상</span>
-            <span id="kpiWarn" class="upload-kpi upload-kpi--warn"><i class="fas fa-triangle-exclamation mr-1"></i><span id="cntWarn">0</span>건 경고</span>
-            <span id="kpiErr"  class="upload-kpi upload-kpi--err"><i class="fas fa-xmark mr-1"></i><span id="cntErr">0</span>건 오류</span>
+            <span class="upload-kpi upload-kpi--ok"><i class="fas fa-check mr-1"></i><span id="cntOk">0</span>건 정상</span>
+            <span class="upload-kpi upload-kpi--warn"><i class="fas fa-triangle-exclamation mr-1"></i><span id="cntWarn">0</span>건 경고</span>
+            <span class="upload-kpi upload-kpi--err"><i class="fas fa-xmark mr-1"></i><span id="cntErr">0</span>건 오류</span>
           </div>
           <div class="overflow-x-auto">
             <table class="tbl text-xs">
-              <thead>
-                <tr id="previewHead"></tr>
-              </thead>
+              <thead><tr id="previewHead"></tr></thead>
               <tbody id="previewBody"></tbody>
             </table>
           </div>
@@ -71,9 +83,20 @@ export async function renderExcelUpload(root) {
           <label class="flex items-start gap-2 cursor-pointer">
             <input id="warnCheck" type="checkbox" class="mt-0.5 accent-brand-500" />
             <span class="text-sm text-amber-800 dark:text-amber-300">
-              경고 행은 일부 권장 정보(담당자/취득일자)가 누락되어 있습니다. 경고 행도 포함하여 등록하겠습니까?
+              경고 행은 일부 권장 정보(담당자/취득일자 등)가 누락되어 있습니다. 경고 행도 포함하여 등록하겠습니까?
             </span>
           </label>
+        </div>
+
+        <!-- 진행 표시 -->
+        <div id="progressArea" class="hidden card">
+          <div class="flex items-center justify-between text-sm mb-2">
+            <span>등록 중...</span>
+            <span id="progressText">0 / 0</span>
+          </div>
+          <div class="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2">
+            <div id="progressBar" class="bg-brand-500 h-2 rounded-full transition-all duration-300" style="width:0%"></div>
+          </div>
         </div>
 
         <div class="flex justify-end gap-2">
@@ -88,8 +111,13 @@ export async function renderExcelUpload(root) {
 
   /* 템플릿 다운로드 */
   root.querySelector('#dlTemplate').addEventListener('click', () => {
-    const headers = ['자산코드','자산명','품목','층','실','담당부서','담당자','취득일자','상태','비고'];
-    const ws = XLSX.utils.aoa_to_sheet([headers]);
+    const headers = ['자산코드','자산명','품목','층','실','담당부서','담당자','취득일자','상태','제조사','모델명','시리얼번호','비고'];
+    const example = ['','노트북 Dell E5540','노트북','3층','301호','진단검사팀','홍길동','2024-01-15','정상','Dell','Latitude E5540','SN12345678',''];
+    const ws = XLSX.utils.aoa_to_sheet([headers, example]);
+
+    /* 컬럼 너비 설정 */
+    ws['!cols'] = headers.map(h => ({ wch: Math.max(h.length * 2, 12) }));
+
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, '자산');
     XLSX.writeFile(wb, '자산_업로드_템플릿.xlsx');
@@ -98,9 +126,13 @@ export async function renderExcelUpload(root) {
   /* 드래그 앤 드롭 */
   const zone = root.querySelector('#uploadZone');
   zone.addEventListener('click', () => root.querySelector('#xlsxInput').click());
-  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
+  zone.addEventListener('dragover',  e => { e.preventDefault(); zone.classList.add('drag-over'); });
   zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
-  zone.addEventListener('drop', e => { e.preventDefault(); zone.classList.remove('drag-over'); handleFile(e.dataTransfer.files[0]); });
+  zone.addEventListener('drop', e => {
+    e.preventDefault();
+    zone.classList.remove('drag-over');
+    handleFile(e.dataTransfer.files[0]);
+  });
   root.querySelector('#xlsxInput').addEventListener('change', e => handleFile(e.target.files[0]));
 
   /* 취소 */
@@ -113,23 +145,41 @@ export async function renderExcelUpload(root) {
   /* 확정 등록 */
   root.querySelector('#confirmUpload').addEventListener('click', async () => {
     const includeWarn = root.querySelector('#warnCheck')?.checked ?? false;
-    const toUpload = parsedRows.filter(r => r._level === 'ok' || (r._level === 'warn' && includeWarn));
+    const toUpload    = parsedRows.filter(r => r._level === 'ok' || (r._level === 'warn' && includeWarn));
     if (!toUpload.length) { toast('등록할 행이 없습니다.', 'warning'); return; }
 
-    const existing = await Assets.list();
-    const existCodes = new Set(existing.map(a => a.asset_code));
-    let seq = existing.length + 1;
+    const existing   = await Assets.list();
+    const existCodes = new Set(existing.map(a => a.asset_code).filter(Boolean));
 
+    /* 진행 표시 */
+    const progressArea = root.querySelector('#progressArea');
+    const progressBar  = root.querySelector('#progressBar');
+    const progressText = root.querySelector('#progressText');
+    progressArea.classList.remove('hidden');
+    root.querySelector('#confirmUpload').disabled = true;
+    root.querySelector('#cancelUpload').disabled  = true;
+
+    let done = 0;
     for (const row of toUpload) {
       const data = { ...row };
-      delete data._level; delete data._msg;
-      if (!data.asset_code) data.asset_code = genCode(data.item_category || 'XX', seq++, existCodes);
-      if (!data.status) data.status = '정상';
-      data.pos_x = null; data.pos_y = null;
+      delete data._level;
+      delete data._msg;
+      if (!data.asset_code) data.asset_code = genCode(data.item_category || 'XX', existCodes);
+      if (!data.status)     data.status = '정상';
+      data.pos_x = null;
+      data.pos_y = null;
       await Assets.add(data);
+      done++;
+      const pct = Math.round((done / toUpload.length) * 100);
+      progressBar.style.width  = pct + '%';
+      progressText.textContent = `${done} / ${toUpload.length}`;
     }
+
     toast(`${toUpload.length}건이 등록되었습니다.`, 'success');
     root.querySelector('#previewSection').classList.add('hidden');
+    progressArea.classList.add('hidden');
+    root.querySelector('#confirmUpload').disabled = false;
+    root.querySelector('#cancelUpload').disabled  = false;
     parsedRows = [];
     root.querySelector('#xlsxInput').value = '';
   });
@@ -140,13 +190,12 @@ export async function renderExcelUpload(root) {
     if (!/\.(xlsx|xls)$/i.test(file.name)) { toast('.xlsx 또는 .xls 파일만 지원합니다.', 'error'); return; }
 
     const buf = await file.arrayBuffer();
-    const wb = XLSX.read(buf, { type: 'array' });
-    const ws = wb.Sheets[wb.SheetNames[0]];
+    const wb  = XLSX.read(buf, { type: 'array' });
+    const ws  = wb.Sheets[wb.SheetNames[0]];
     const raw = XLSX.utils.sheet_to_json(ws, { defval: '' });
 
     if (!raw.length) { toast('파일에 데이터가 없습니다.', 'warning'); return; }
 
-    /* 컬럼 매핑 확인 */
     const headers = Object.keys(raw[0]);
     const missing = REQUIRED.filter(r => !headers.includes(r));
     if (missing.length) {
@@ -154,10 +203,10 @@ export async function renderExcelUpload(root) {
       return;
     }
 
-    const existing = await Assets.list();
-    const existCodes = new Set(existing.map(a => a.asset_code));
+    const existing   = await Assets.list();
+    const existCodes = new Set(existing.map(a => a.asset_code).filter(Boolean));
 
-    parsedRows = raw.map(row => {
+    parsedRows = raw.map((row, idx) => {
       const mapped = {};
       for (const [kr, en] of Object.entries(FIELD_MAP)) {
         if (row[kr] !== undefined) mapped[en] = String(row[kr]).trim();
@@ -170,10 +219,14 @@ export async function renderExcelUpload(root) {
       if (!mapped.asset_name)    errors.push('자산명 누락');
       if (!mapped.item_category) errors.push('품목 누락');
       if (!mapped.floor)         errors.push('층 누락');
-      else if (!FLOORS.includes(mapped.floor)) errors.push(`층 값 오류(${mapped.floor})`);
+      else if (!FLOORS.includes(mapped.floor)) errors.push(`층 값 오류(${mapped.floor}) — 2층~7층만 허용`);
       if (!mapped.department)    errors.push('담당부서 누락');
-      if (mapped.status && !STATUS_OK.includes(mapped.status)) errors.push(`상태 값 오류(${mapped.status})`);
-      if (mapped.asset_code && existCodes.has(mapped.asset_code)) errors.push('자산코드 중복');
+      if (mapped.status && !STATUS_OK.includes(mapped.status))
+        errors.push(`상태 오류(${mapped.status}) — 정상/수리중/폐기`);
+      if (mapped.asset_code && existCodes.has(mapped.asset_code))
+        errors.push(`자산코드 중복(${mapped.asset_code})`);
+      if (mapped.acquired_date && mapped.acquired_date !== '' && !DATE_RE.test(mapped.acquired_date))
+        errors.push(`취득일자 형식 오류(${mapped.acquired_date}) — YYYY-MM-DD`);
 
       /* 경고 검증 */
       if (!mapped.manager)       warns.push('담당자 미입력');
@@ -182,7 +235,7 @@ export async function renderExcelUpload(root) {
 
       const level = errors.length ? 'err' : warns.length ? 'warn' : 'ok';
       const msg   = [...errors, ...warns].join(' · ');
-      return { ...mapped, _level: level, _msg: msg };
+      return { ...mapped, _level: level, _msg: msg, _row: idx + 2 };
     });
 
     renderPreview(root, parsedRows, headers);
@@ -198,22 +251,25 @@ function renderPreview(root, rows, headers) {
   root.querySelector('#cntWarn').textContent = cntWarn;
   root.querySelector('#cntErr').textContent  = cntErr;
 
-  /* 표 헤더 */
   const mappedHeaders = headers.filter(h => FIELD_MAP[h]).map(h => FIELD_MAP[h]);
   root.querySelector('#previewHead').innerHTML =
-    `<th>#</th>` + mappedHeaders.map(h => `<th>${korLabel(h)}</th>`).join('') + `<th>검증</th>`;
+    `<th>행</th>` + mappedHeaders.map(h => `<th>${korLabel(h)}</th>`).join('') + `<th>검증</th>`;
 
-  /* 표 바디 */
-  root.querySelector('#previewBody').innerHTML = rows.map((r, i) => {
+  root.querySelector('#previewBody').innerHTML = rows.map(r => {
     const rowCls = r._level === 'ok' ? 'row-ok' : r._level === 'warn' ? 'row-warn' : 'row-err';
-    const icon   = r._level === 'ok' ? '<i class="fas fa-check text-green-600"></i>'
-      : r._level === 'warn' ? '<i class="fas fa-triangle-exclamation text-amber-500"></i>'
-      : '<i class="fas fa-xmark text-red-500"></i>';
-    const cells  = mappedHeaders.map(h => `<td>${r[h] ?? ''}</td>`).join('');
-    return `<tr class="${rowCls}"><td class="text-slate-400">${i+1}</td>${cells}<td><div class="flex items-start gap-1">${icon}<span class="row-msg">${r._msg || ''}</span></div></td></tr>`;
+    const icon   = r._level === 'ok'
+      ? '<i class="fas fa-check text-green-600"></i>'
+      : r._level === 'warn'
+        ? '<i class="fas fa-triangle-exclamation text-amber-500"></i>'
+        : '<i class="fas fa-xmark text-red-500"></i>';
+    const cells = mappedHeaders.map(h => `<td>${r[h] ?? ''}</td>`).join('');
+    return `<tr class="${rowCls}">
+      <td class="text-slate-400">${r._row}</td>
+      ${cells}
+      <td><div class="flex items-start gap-1">${icon}<span class="row-msg">${r._msg || ''}</span></div></td>
+    </tr>`;
   }).join('');
 
-  /* 경고 체크박스 */
   const warnArea = root.querySelector('#warnConfirmArea');
   if (cntWarn > 0) warnArea.classList.remove('hidden');
   else warnArea.classList.add('hidden');
@@ -222,10 +278,6 @@ function renderPreview(root, rows, headers) {
 }
 
 function korLabel(en) {
-  const rev = Object.fromEntries(Object.entries({
-    '자산코드':'asset_code','자산명':'asset_name','품목':'item_category',
-    '층':'floor','실':'room','담당부서':'department','담당자':'manager',
-    '취득일자':'acquired_date','상태':'status','비고':'note'
-  }).map(([k,v]) => [v,k]));
+  const rev = Object.fromEntries(Object.entries(FIELD_MAP).map(([k, v]) => [v, k]));
   return rev[en] || en;
 }

@@ -43,8 +43,12 @@ export function navigate(name) {
 let currentRouteName = null;
 
 export function handleRoute() {
-  const hash = location.hash.replace(/^#/, '') || 'dashboard';
-  const route = ROUTES[hash];
+  const raw   = location.hash.replace(/^#/, '') || 'dashboard';
+  const sepIdx = raw.indexOf('?');
+  const routeName = sepIdx >= 0 ? raw.slice(0, sepIdx) : raw;
+  const params    = new URLSearchParams(sepIdx >= 0 ? raw.slice(sepIdx + 1) : '');
+
+  const route = ROUTES[routeName];
   if (!route) {
     toast('알 수 없는 페이지입니다.', 'warning');
     location.hash = 'dashboard';
@@ -56,7 +60,7 @@ export function handleRoute() {
     return;
   }
 
-  currentRouteName = hash;
+  currentRouteName = routeName;
   const titleEl = document.getElementById('pageTitle');
   if (titleEl) titleEl.textContent = route.title;
 
@@ -65,7 +69,7 @@ export function handleRoute() {
     root.classList.remove('fade-in');
     void root.offsetWidth;
     root.classList.add('fade-in');
-    Promise.resolve(route.render(root)).catch(err => {
+    Promise.resolve(route.render(root, params)).catch(err => {
       console.error('[router] render error', err);
       root.innerHTML = `<div class="card"><p class="text-red-500">페이지를 불러오는 중 오류가 발생했습니다.</p></div>`;
     });
