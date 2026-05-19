@@ -166,6 +166,24 @@
         <div class="flex items-center gap-3 text-sm">
           <span id="sessionTimer" class="hidden text-xs text-slate-500"><i class="far fa-clock mr-1"></i><span></span></span>
 
+          <!-- 알림 센터 -->
+          <div class="relative">
+            <button id="notifBtn" class="hidden relative text-slate-500 hover:text-brand-500 p-1" title="알림">
+              <i class="fas fa-bell text-lg"></i>
+              <span id="notifBadge" class="hidden absolute -top-1 -right-1 min-w-[16px] h-4 px-1 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center leading-none"></span>
+            </button>
+            <div id="notifPanel" class="hidden absolute right-0 top-10 w-80 bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden z-[200]">
+              <div class="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-700">
+                <h4 class="font-semibold text-sm"><i class="fas fa-bell mr-1.5 text-brand-500"></i>알림 센터</h4>
+                <button id="notifRefresh" class="text-xs text-slate-400 hover:text-brand-500 px-1 py-0.5 rounded" title="새로고침"><i class="fas fa-rotate-right"></i></button>
+              </div>
+              <div id="notifList" class="max-h-80 overflow-y-auto"></div>
+              <div class="px-4 py-2 border-t border-slate-100 dark:border-slate-700 text-center">
+                <span class="text-[11px] text-slate-400"><i class="fas fa-circle-info mr-1"></i>1분마다 자동 갱신</span>
+              </div>
+            </div>
+          </div>
+
           <!-- 역할 전환 탭 -->
           <div id="roleSwitcher" class="hidden items-center bg-slate-100 dark:bg-slate-700 rounded-lg p-0.5 text-xs font-medium">
             <button id="tabDept" class="role-tab px-3 py-1.5 rounded-md transition-all">
@@ -232,7 +250,8 @@
         <button id="detailCloseBtn" class="text-slate-400 hover:text-slate-600 text-xl leading-none">&times;</button>
       </div>
       <div id="detailBody" class="px-6 py-5"></div>
-      <div class="flex justify-end gap-2 px-6 py-4 border-t border-slate-200 dark:border-slate-700 flex-wrap">
+      <div class="flex gap-2 px-6 py-4 border-t border-slate-200 dark:border-slate-700 flex-wrap items-center">
+        <button id="detailPrintBtn" class="btn-secondary text-slate-500 mr-auto"><i class="fas fa-print mr-1"></i>인쇄</button>
         <button id="detailDisposalBtn" class="btn-secondary text-amber-600 hover:bg-amber-50 hidden"><i class="fas fa-trash-can mr-1"></i>폐기 처리</button>
         <button id="detailRepairCompleteBtn" class="btn-secondary text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 hidden"><i class="fas fa-check mr-1"></i>수리 완료</button>
         <button id="detailRepairBtn" class="btn-secondary text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 hidden"><i class="fas fa-wrench mr-1"></i>수리 접수</button>

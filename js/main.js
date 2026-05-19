@@ -4,6 +4,7 @@ import { handleRoute, navigate } from './router.js';
 import { toast } from './ui/toast.js';
 import { seedIfEmpty } from './seed.js';
 import { MoveRequests } from './store.js';
+import { initNotifications, refreshNotifications } from './ui/notifications.js';
 
 /* ─── 화면 토글 ─── */
 const $ = sel => document.querySelector(sel);
@@ -118,6 +119,7 @@ function enterApp(role) {
   }
 
   showView('appLayout');
+  refreshNotifications();
   if (!location.hash) location.hash = 'dashboard';
   else handleRoute();
   if (role === 'admin') updatePendingBadge();
@@ -338,6 +340,7 @@ async function boot() {
   await seedIfEmpty();
   bindEvents();
   startSessionWatcher();
+  initNotifications();
 
   // 새로고침 후 세션 살아있으면 관리자로 자동 복귀
   if (isAdmin() && location.hash) {

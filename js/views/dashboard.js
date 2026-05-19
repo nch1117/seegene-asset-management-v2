@@ -5,7 +5,7 @@ import { ageBadge } from './assets.js';
 
 const FLOORS = ['2층', '3층', '4층', '5층', '6층', '7층'];
 const STATUSES = ['정상', '수리중', '폐기'];
-let charts = { floor: null, item: null, cross: null };
+let charts = { floor: null, item: null, cross: null, monthly: null, dept: null };
 let state = { selectedFloor: null, filters: { floor: '', item: '', status: '', dept: '' } };
 
 export async function renderDashboard(root) {
@@ -97,8 +97,12 @@ export async function renderDashboard(root) {
       ? `필터 적용: ${active.join(' · ')} → ${total}건 / 전체 ${allAssets.length}건`
       : `전체 ${allAssets.length}건`;
 
+    const filteredDeptCount = [...new Set(assets.map(a => a.department).filter(Boolean))].length;
+    const deptChartH = Math.max(200, filteredDeptCount * 32);
+
     const content = root.querySelector('#dashContent');
     content.innerHTML = `
+      <!-- KPI -->
       <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3 mb-6">
         ${kpi('전체 자산',    total,     'fa-boxes-stacked')}
         ${kpi('정상',         ok,        'fa-circle-check')}
@@ -109,26 +113,43 @@ export async function renderDashboard(root) {
         ${kpi('노후 자산',    aging,     'fa-triangle-exclamation', aging > 0)}
       </div>
 
+      <!-- 층별 + 품목별 -->
       <div class="grid lg:grid-cols-2 gap-4 mb-4">
         <div class="card">
           <div class="flex items-center justify-between mb-1">
             <h3 class="font-semibold text-sm"><i class="fas fa-building mr-1 text-brand-500"></i>층별 자산</h3>
             <span class="text-[11px] text-slate-400">막대 클릭 → 교차분석</span>
           </div>
-          <div style="height:180px"><canvas id="chartFloor"></canvas></div>
+          <div style="height:200px"><canvas id="chartFloor"></canvas></div>
         </div>
         <div class="card">
           <h3 class="font-semibold text-sm mb-1"><i class="fas fa-chart-pie mr-1 text-brand-500"></i>품목별 분포</h3>
-          <div style="height:180px"><canvas id="chartItem"></canvas></div>
+          <div style="height:200px"><canvas id="chartItem"></canvas></div>
         </div>
       </div>
 
+      <!-- 월별 등록 추이 -->
       <div class="card mb-4">
         <div class="flex items-center justify-between mb-1">
-          <h3 class="font-semibold text-sm"><i class="fas fa-layer-group mr-1 text-brand-500"></i>교차분석</h3>
-          <span id="crossTitle" class="text-[11px] text-slate-400">층을 선택하면 해당 층의 품목 분포를 표시합니다.</span>
+          <h3 class="font-semibold text-sm"><i class="fas fa-chart-line mr-1 text-brand-500"></i>월별 자산 등록 추이</h3>
+          <span class="text-[11px] text-slate-400">최근 12개월 신규 등록</span>
         </div>
-        <div style="height:140px"><canvas id="chartCross"></canvas></div>
+        <div style="height:180px"><canvas id="chartMonthly"></canvas></div>
+      </div>
+
+      <!-- 부서별 현황 + 교차분석 -->
+      <div class="grid lg:grid-cols-2 gap-4 mb-4">
+        <div class="card">
+          <h3 class="font-semibold text-sm mb-1"><i class="fas fa-building-user mr-1 text-brand-500"></i>부서별 자산 현황</h3>
+          <div style="height:${deptChartH}px"><canvas id="chartDept"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="flex items-center justify-between mb-1">
+            <h3 class="font-semibold text-sm"><i class="fas fa-layer-group mr-1 text-brand-500"></i>교차분석</h3>
+            <span id="crossTitle" class="text-[11px] text-slate-400">층을 선택하면 품목 분포를 표시합니다.</span>
+          </div>
+          <div style="height:${deptChartH}px"><canvas id="chartCross"></canvas></div>
+        </div>
       </div>
 
       <!-- 최근 등록 자산 -->
@@ -144,14 +165,6 @@ export async function renderDashboard(root) {
         </div>
       </div>
 
-      <!-- 부서별 현황 카드 -->
-      <div class="card mb-4">
-        <h3 class="font-semibold text-sm mb-3"><i class="fas fa-building-user mr-1 text-brand-500"></i>부서별 자산 현황</h3>
-        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-          ${deptCards(assets)}
-        </div>
-      </div>
-
       <!-- 최근 이동 신청 -->
       <div class="card">
         <div class="flex items-center justify-between mb-2">
@@ -164,6 +177,8 @@ export async function renderDashboard(root) {
 
     drawFloorChart(assets);
     drawItemChart(assets);
+    drawMonthlyChart(assets);
+    drawDeptChart(assets);
     drawCrossChart(assets, state.selectedFloor);
   }
 
@@ -214,48 +229,6 @@ function statusBadge(s) {
   return `<span class="badge">${s || '-'}</span>`;
 }
 
-function deptCards(assets) {
-  const map = new Map();
-  for (const a of assets) {
-    const k = a.department || '미지정';
-    if (!map.has(k)) map.set(k, { total: 0, ok: 0, repair: 0, disposed: 0 });
-    const d = map.get(k);
-    d.total++;
-    if (a.status === '정상')   d.ok++;
-    else if (a.status === '수리중') d.repair++;
-    else if (a.status === '폐기')   d.disposed++;
-  }
-  if (!map.size) return `<p class="text-xs text-slate-400 col-span-full text-center py-4">데이터 없음</p>`;
-
-  return [...map.entries()]
-    .sort((a, b) => b[1].total - a[1].total)
-    .map(([dept, d]) => {
-      const repairRate = d.total > 0 ? Math.round(d.repair / d.total * 100) : 0;
-      const repairColor = repairRate >= 30 ? 'text-red-500' : repairRate >= 15 ? 'text-amber-500' : 'text-slate-400';
-      return `
-        <div class="border border-slate-200 dark:border-slate-700 rounded-xl p-3 hover:shadow-sm transition-shadow">
-          <div class="flex items-start justify-between mb-2">
-            <span class="font-semibold text-xs leading-tight truncate max-w-[90px]" title="${dept}">${dept}</span>
-            <span class="text-xl font-bold text-brand-500 shrink-0 ml-1">${d.total}</span>
-          </div>
-          <div class="flex flex-wrap gap-1 mb-2">
-            <span class="badge badge--ok text-[10px]">정상 ${d.ok}</span>
-            ${d.repair  > 0 ? `<span class="badge badge--repair text-[10px]">수리 ${d.repair}</span>`  : ''}
-            ${d.disposed > 0 ? `<span class="badge badge--disposed text-[10px]">폐기 ${d.disposed}</span>` : ''}
-          </div>
-          ${repairRate > 0 ? `
-          <div>
-            <div class="flex justify-between text-[10px] mb-0.5">
-              <span class="text-slate-400">수리율</span>
-              <span class="font-medium ${repairColor}">${repairRate}%</span>
-            </div>
-            <div class="h-1 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
-              <div class="h-1 rounded-full ${repairRate >= 30 ? 'bg-red-400' : 'bg-amber-400'}" style="width:${repairRate}%"></div>
-            </div>
-          </div>` : ''}
-        </div>`;
-    }).join('');
-}
 
 function recentRequests(requests, assets) {
   const assetMap = new Map(assets.map(a => [a.id, a]));
@@ -339,8 +312,8 @@ function drawCrossChart(assets, floor) {
   if (!ctx) return;
   destroyChart('cross');
   if (!floor) {
-    if (titleEl) titleEl.textContent = '층을 선택하면 해당 층의 품목 분포를 표시합니다.';
-    ctx.parentElement.style.opacity = '.5';
+    if (titleEl) titleEl.textContent = '층을 선택하면 품목 분포를 표시합니다.';
+    ctx.parentElement.style.opacity = '.35';
     return;
   }
   ctx.parentElement.style.opacity = '1';
@@ -353,5 +326,109 @@ function drawCrossChart(assets, floor) {
     type: 'bar',
     data: { labels, datasets: [{ label: floor, data, backgroundColor: '#fb7185', borderRadius: 6 }] },
     options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { precision: 0 } } } }
+  });
+}
+
+function drawMonthlyChart(assets) {
+  const ctx = document.getElementById('chartMonthly');
+  if (!ctx) return;
+
+  const now = new Date();
+  const months = Array.from({ length: 12 }, (_, i) => {
+    const d = new Date(now.getFullYear(), now.getMonth() - (11 - i), 1);
+    return { year: d.getFullYear(), month: d.getMonth(), label: `${String(d.getFullYear()).slice(2)}년 ${d.getMonth() + 1}월` };
+  });
+
+  const counts = months.map(m =>
+    assets.filter(a => {
+      if (!a.createdAt) return false;
+      const d = new Date(a.createdAt);
+      return d.getFullYear() === m.year && d.getMonth() === m.month;
+    }).length
+  );
+
+  const isDark = document.documentElement.classList.contains('dark');
+  const gridColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
+
+  destroyChart('monthly');
+  charts.monthly = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: months.map(m => m.label),
+      datasets: [{
+        label: '신규 등록',
+        data: counts,
+        borderColor: '#3b82f6',
+        backgroundColor: 'rgba(59,130,246,0.12)',
+        fill: true,
+        tension: 0.4,
+        pointBackgroundColor: '#3b82f6',
+        pointBorderColor: '#fff',
+        pointBorderWidth: 2,
+        pointRadius: 4,
+        pointHoverRadius: 6
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: { label: ctx => ` ${ctx.parsed.y}건 등록` }
+        }
+      },
+      scales: {
+        x: { grid: { color: gridColor }, ticks: { font: { size: 10 } } },
+        y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: gridColor } }
+      }
+    }
+  });
+}
+
+function drawDeptChart(assets) {
+  const ctx = document.getElementById('chartDept');
+  if (!ctx) return;
+
+  const deptMap = new Map();
+  for (const a of assets) {
+    const k = a.department || '미지정';
+    if (!deptMap.has(k)) deptMap.set(k, { ok: 0, repair: 0, disposed: 0 });
+    const d = deptMap.get(k);
+    if (a.status === '정상')   d.ok++;
+    else if (a.status === '수리중') d.repair++;
+    else if (a.status === '폐기')   d.disposed++;
+  }
+
+  const sorted = [...deptMap.entries()].sort((a, b) => {
+    const ta = a[1].ok + a[1].repair + a[1].disposed;
+    const tb = b[1].ok + b[1].repair + b[1].disposed;
+    return tb - ta;
+  });
+
+  destroyChart('dept');
+  charts.dept = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: sorted.map(([d]) => d),
+      datasets: [
+        { label: '정상',  data: sorted.map(([,d]) => d.ok),       backgroundColor: '#22c55e' },
+        { label: '수리중', data: sorted.map(([,d]) => d.repair),   backgroundColor: '#f97316' },
+        { label: '폐기',  data: sorted.map(([,d]) => d.disposed), backgroundColor: '#ef4444' }
+      ]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11 }, padding: 8 } },
+        tooltip: { callbacks: { footer: items => `합계: ${items.reduce((s, i) => s + i.parsed.x, 0)}건` } }
+      },
+      scales: {
+        x: { stacked: true, beginAtZero: true, ticks: { precision: 0 } },
+        y: { stacked: true, ticks: { font: { size: 11 } } }
+      }
+    }
   });
 }

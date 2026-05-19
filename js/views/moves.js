@@ -139,9 +139,7 @@ export async function renderMoveRequest(root) {
       renderPage();
     });
 
-    ['s1Text','s1Floor','s1Dept'].forEach(id =>
-      root.querySelector('#' + id).addEventListener('input', renderList)
-    );
+    root.querySelector('#s1Text').addEventListener('input', renderList);
     root.querySelector('#s1Floor').addEventListener('change', renderList);
     root.querySelector('#s1Dept').addEventListener('change', renderList);
 
@@ -226,12 +224,19 @@ export async function renderMoveRequest(root) {
 
     root.querySelector('#reqForm').addEventListener('submit', async e => {
       e.preventDefault();
-      const data = Object.fromEntries(new FormData(e.target));
-      await MoveRequests.add({ ...data, asset_id: selectedAsset.id, status: '대기', type: '이동신청' });
-      toast('이동 신청이 접수되었습니다.', 'success');
-      selectedAsset = null;
-      step = 1;
-      renderStep1();
+      const btn = e.target.querySelector('[type=submit]');
+      btn.disabled = true;
+      try {
+        const data = Object.fromEntries(new FormData(e.target));
+        await MoveRequests.add({ ...data, asset_id: selectedAsset.id, status: '대기', type: '이동신청' });
+        toast('이동 신청이 접수되었습니다.', 'success');
+        selectedAsset = null;
+        step = 1;
+        renderStep1();
+      } catch (err) {
+        toast('신청 중 오류가 발생했습니다. 다시 시도해주세요.', 'error');
+        btn.disabled = false;
+      }
     });
   }
 
@@ -349,10 +354,9 @@ export async function renderDisposalRequest(root) {
       renderPage();
     });
 
-    ['d1Text','d1Floor','d1Dept'].forEach(id => {
-      root.querySelector('#' + id).addEventListener('input', renderList);
-      root.querySelector('#' + id).addEventListener('change', renderList);
-    });
+    root.querySelector('#d1Text').addEventListener('input', renderList);
+    root.querySelector('#d1Floor').addEventListener('change', renderList);
+    root.querySelector('#d1Dept').addEventListener('change', renderList);
 
     root.querySelector('#d1Next').addEventListener('click', () => {
       if (!selectedAsset) return;
@@ -364,7 +368,7 @@ export async function renderDisposalRequest(root) {
   }
 
   function renderStep2() {
-    const session = getSession ? getSession() : null;
+    const session = getSession();
     root.innerHTML = `
       <div class="card max-w-3xl">
         <h3 class="font-semibold mb-4"><i class="fas fa-trash-can mr-1 text-brand-500"></i>폐기 신청
@@ -411,19 +415,26 @@ export async function renderDisposalRequest(root) {
 
     root.querySelector('#dispReqForm').addEventListener('submit', async e => {
       e.preventDefault();
-      const data = Object.fromEntries(new FormData(e.target));
-      await MoveRequests.add({
-        ...data,
-        asset_id: selectedAsset.id,
-        type: '폐기신청',
-        status: '대기',
-        to_floor: selectedAsset.floor,
-        to_room: selectedAsset.room || ''
-      });
-      toast('폐기 신청이 접수되었습니다. 운영관리팀 승인 후 처리됩니다.', 'success');
-      selectedAsset = null;
-      step = 1;
-      renderStep1();
+      const btn = e.target.querySelector('[type=submit]');
+      btn.disabled = true;
+      try {
+        const data = Object.fromEntries(new FormData(e.target));
+        await MoveRequests.add({
+          ...data,
+          asset_id: selectedAsset.id,
+          type: '폐기신청',
+          status: '대기',
+          to_floor: selectedAsset.floor,
+          to_room: selectedAsset.room || ''
+        });
+        toast('폐기 신청이 접수되었습니다. 운영관리팀 승인 후 처리됩니다.', 'success');
+        selectedAsset = null;
+        step = 1;
+        renderStep1();
+      } catch (err) {
+        toast('신청 중 오류가 발생했습니다. 다시 시도해주세요.', 'error');
+        btn.disabled = false;
+      }
     });
   }
 
@@ -555,40 +566,45 @@ export async function renderApproveRequests(root) {
       const id   = tr.dataset.id;
       const type = tr.dataset.type;
       const act  = btn.dataset.act;
-      const req  = await MoveRequests.get(id);
-      if (!req) return;
+      btn.disabled = true;
+      try {
+        const req = await MoveRequests.get(id);
+        if (!req) { btn.disabled = false; return; }
 
-      if (act === 'approve') {
-        const asset = assetMap.get(req.asset_id);
-        if (asset) {
-          if (type === '폐기신청') {
-            /* 자산 상태를 폐기로 변경 */
-            await Assets.put({ ...asset, status: '폐기', disposed_at: new Date().toISOString(), disposal_reason: req.reason });
-            await MoveHistory.add({
-              asset_id: asset.id, asset_code: asset.asset_code, asset_name: asset.asset_name,
-              before: asset.status, after: '폐기', moved_at: new Date().toISOString(),
-              handler: getSession()?.adminName || '-', type: '폐기승인'
-            });
-          } else {
-            const before = `${asset.floor} ${asset.room||''}`;
-            const after  = `${req.to_floor} ${req.to_room||''}`;
-            await Assets.put({ ...asset, floor: req.to_floor, room: req.to_room });
-            await MoveHistory.add({
-              asset_id: asset.id, asset_code: asset.asset_code, asset_name: asset.asset_name,
-              before, after, moved_at: new Date().toISOString(),
-              handler: getSession()?.adminName || '-', type: '신청승인'
-            });
+        if (act === 'approve') {
+          const asset = assetMap.get(req.asset_id);
+          if (asset) {
+            if (type === '폐기신청') {
+              await Assets.put({ ...asset, status: '폐기', disposed_at: new Date().toISOString(), disposal_reason: req.reason });
+              await MoveHistory.add({
+                asset_id: asset.id, asset_code: asset.asset_code, asset_name: asset.asset_name,
+                before: asset.status, after: '폐기', moved_at: new Date().toISOString(),
+                handler: getSession()?.adminName || '-', type: '폐기승인'
+              });
+            } else {
+              const before = `${asset.floor} ${asset.room||''}`;
+              const after  = `${req.to_floor} ${req.to_room||''}`;
+              await Assets.put({ ...asset, floor: req.to_floor, room: req.to_room });
+              await MoveHistory.add({
+                asset_id: asset.id, asset_code: asset.asset_code, asset_name: asset.asset_name,
+                before, after, moved_at: new Date().toISOString(),
+                handler: getSession()?.adminName || '-', type: '신청승인'
+              });
+            }
           }
+          await MoveRequests.put({ ...req, status: '승인', processedAt: new Date().toISOString(), approver: getSession()?.adminName });
+          toast(type === '폐기신청' ? '폐기 처리되었습니다.' : '이동 승인 처리되었습니다.', 'success');
+        } else {
+          const reason = prompt('반려 사유를 입력하세요.', '');
+          if (reason === null) { btn.disabled = false; return; }
+          await MoveRequests.put({ ...req, status: '반려', processedAt: new Date().toISOString(), reject_reason: reason });
+          toast('반려 처리되었습니다.', 'info');
         }
-        await MoveRequests.put({ ...req, status: '승인', processedAt: new Date().toISOString(), approver: getSession()?.adminName });
-        toast(type === '폐기신청' ? '폐기 처리되었습니다.' : '이동 승인 처리되었습니다.', 'success');
-      } else {
-        const reason = prompt('반려 사유를 입력하세요.', '');
-        if (reason === null) return;
-        await MoveRequests.put({ ...req, status: '반려', processedAt: new Date().toISOString(), reject_reason: reason });
-        toast('반려 처리되었습니다.', 'info');
+        renderApproveRequests(root);
+      } catch (err) {
+        toast('처리 중 오류가 발생했습니다. 다시 시도해주세요.', 'error');
+        btn.disabled = false;
       }
-      renderApproveRequests(root);
     });
   });
 }

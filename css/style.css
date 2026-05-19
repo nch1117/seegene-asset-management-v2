@@ -805,19 +805,65 @@ body.role-dept  .dept-only-block  { display: block; }
 .qr-label__loc  { font-size: .62rem; color: rgb(100 116 139); margin-top: 1px; }
 .dark .qr-label__name { color: rgb(241 245 249); }
 
-@media print {
 /* ─── 보고서 탭 ─── */
 .report-tab { padding: 0.75rem 1rem; font-size: 0.875rem; font-weight: 500; transition: color .15s, border-color .15s; border-bottom: 2px solid transparent; }
 .report-tab--active { border-bottom-color: rgb(239 68 68); color: rgb(239 68 68); font-weight: 600; }
 .report-tab:not(.report-tab--active):hover { color: rgb(100 116 139); }
 
-  body > *:not(#printArea) { display: none !important; }
-  #printArea {
+/* ─── 알림 센터 ─── */
+.notif-item {
+  display: flex; align-items: center; gap: 0.75rem;
+  padding: 0.875rem 1rem; width: 100%;
+  transition: background .12s; cursor: pointer; border: none; background: transparent;
+}
+.notif-item:hover { background: rgb(248 250 252); }
+.dark .notif-item:hover { background: rgb(30 41 59); }
+.notif-icon {
+  width: 2.25rem; height: 2.25rem; border-radius: 0.5rem; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center; font-size: 0.9rem;
+}
+@keyframes notif-ring {
+  0%,100% { transform: rotate(0deg); }
+  20%      { transform: rotate(-15deg); }
+  40%      { transform: rotate(15deg); }
+  60%      { transform: rotate(-10deg); }
+  80%      { transform: rotate(10deg); }
+}
+.notif-btn--has i { animation: notif-ring 1.2s ease infinite; transform-origin: top center; }
+
+/* ─── 인쇄 ─── */
+#printAssetDetail, #printAssetList { display: none; }
+
+@media print {
+  body > *:not(#printArea):not(#printAssetDetail):not(#printAssetList) { display: none !important; }
+
+  #printArea, #printAssetDetail, #printAssetList {
     display: block !important;
     position: fixed; inset: 0; z-index: 9999;
-    background: white; padding: 1cm;
+    background: #fff; padding: 1.5cm 2cm; overflow: auto;
+    color: #000; font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
   }
+
+  /* QR 라벨 */
   .qr-label-grid { grid-template-columns: repeat(3, 1fr); gap: 4mm; }
   .qr-label { border: 1px solid #ccc; padding: 4mm 3mm; border-radius: 3mm; }
   .qr-label__img { width: 22mm; height: 22mm; }
+
+  /* 자산 인쇄 공통 헤더 */
+  .print-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 6mm; padding-bottom: 3mm; border-bottom: 1.5px solid #333; }
+  .print-header h2 { font-size: 15pt; font-weight: 700; margin: 0; }
+  .print-header p  { font-size: 9pt; color: #555; margin: 0; }
+
+  /* 자산 상세 - 2열 DL */
+  .print-dl { display: grid; grid-template-columns: 1fr 1fr; gap: 0 6mm; }
+  .print-dl > div { display: flex; gap: 2mm; padding: 1.5mm 0; border-bottom: 0.5px solid #e8e8e8; }
+  .print-dl dt { width: 20mm; flex-shrink: 0; font-size: 9pt; color: #555; }
+  .print-dl dd { font-size: 10pt; font-weight: 500; word-break: break-all; }
+
+  /* 자산 목록 - 테이블 */
+  .print-table { width: 100%; border-collapse: collapse; font-size: 8.5pt; margin-top: 4mm; }
+  .print-table th { background: #f0f0f0; padding: 2mm 3mm; text-align: left; border: 0.5px solid #bbb; font-weight: 700; }
+  .print-table td { padding: 1.5mm 3mm; border: 0.5px solid #ddd; }
+  .print-table tr:nth-child(even) td { background: #f8f8f8; }
+  .print-table .mono { font-family: monospace; font-size: 7.5pt; }
 }

@@ -2,6 +2,8 @@
 import { Assets, AssetHistory, RepairHistory } from '../store.js';
 import { toast } from '../ui/toast.js';
 import { isAdmin, getSession } from '../auth.js';
+import { storage } from '../firebase.js';
+import { ref as storageRef, uploadBytes, getDownloadURL } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-storage.js';
 
 /* ── 수정 이력 추적 필드 ── */
 const TRACKED_FIELDS = {
@@ -26,6 +28,12 @@ async function logChange(oldAsset, newAsset, type = '수정') {
     change_type:     type,
     changes
   });
+}
+
+async function uploadAssetPhoto(assetId, file) {
+  const r = storageRef(storage, `assets/${assetId}/photo`);
+  const snap = await uploadBytes(r, file);
+  return getDownloadURL(snap.ref);
 }
 
 /* ── 노후 경고 배지 ── */
@@ -71,6 +79,81 @@ async function generateAssetCode(category) {
 }
 
 /* ─────────────────────────────────────────
+   인쇄 헬퍼
+───────────────────────────────────────── */
+function printAssetDetail(a) {
+  document.getElementById('printAssetDetail')?.remove();
+  const org = '씨젠의료재단';
+  const now = new Date().toLocaleString('ko');
+  const fields = [
+    ['자산코드', `<span style="font-family:monospace">${a.asset_code || '-'}</span>`],
+    ['자산명',   a.asset_name   || '-'],
+    ['품목',     a.item_category || '-'],
+    ['상태',     a.status       || '-'],
+    ['층',       a.floor        || '-'],
+    ['실',       a.room         || '-'],
+    ['담당부서', a.department   || '-'],
+    ['담당자',   a.manager      || '-'],
+    ['취득일자', a.acquired_date || '-'],
+    ['등록일',   a.createdAt ? new Date(a.createdAt).toLocaleDateString('ko') : '-'],
+    ...(a.maker  ? [['제조사',    a.maker]]  : []),
+    ...(a.model  ? [['모델명',    a.model]]  : []),
+    ...(a.serial ? [['시리얼번호', a.serial]] : []),
+    ...(a.note   ? [['비고',      a.note]]   : []),
+    ...(a.disposed_at     ? [['폐기일자', `<span style="color:#ef4444">${a.disposed_at}</span>`]]   : []),
+    ...(a.disposal_reason ? [['폐기사유', a.disposal_reason]] : []),
+  ];
+  const dlHtml = fields.map(([dt, dd]) => `<div><dt>${dt}</dt><dd>${dd}</dd></div>`).join('');
+  const el = document.createElement('div');
+  el.id = 'printAssetDetail';
+  el.innerHTML = `
+    <div class="print-header">
+      <h2>자산 상세 정보</h2>
+      <p>${org} &nbsp;|&nbsp; 출력일: ${now}</p>
+    </div>
+    ${a.photo_url ? `<div style="margin-bottom:6mm;text-align:center"><img src="${a.photo_url}" style="max-height:50mm;object-fit:contain;border:0.5px solid #ddd;border-radius:2mm" /></div>` : ''}
+    <dl class="print-dl">${dlHtml}</dl>`;
+  document.body.appendChild(el);
+  window.addEventListener('afterprint', () => el.remove(), { once: true });
+  window.print();
+}
+
+function printAssetList(assets) {
+  document.getElementById('printAssetList')?.remove();
+  const org = '씨젠의료재단';
+  const now = new Date().toLocaleDateString('ko');
+  const rows = assets.map(a => `
+    <tr>
+      <td class="mono">${a.asset_code || ''}</td>
+      <td>${a.asset_name || ''}</td>
+      <td>${a.item_category || ''}</td>
+      <td>${a.floor || ''}</td>
+      <td>${a.room || ''}</td>
+      <td>${a.department || ''}</td>
+      <td>${a.manager || ''}</td>
+      <td>${a.status || ''}</td>
+      <td>${a.acquired_date || ''}</td>
+    </tr>`).join('');
+  const el = document.createElement('div');
+  el.id = 'printAssetList';
+  el.innerHTML = `
+    <div class="print-header">
+      <h2>자산 목록</h2>
+      <p>${org} &nbsp;|&nbsp; 총 ${assets.length}건 &nbsp;|&nbsp; 출력일: ${now}</p>
+    </div>
+    <table class="print-table">
+      <thead><tr>
+        <th>자산코드</th><th>자산명</th><th>품목</th><th>층</th><th>실</th>
+        <th>담당부서</th><th>담당자</th><th>상태</th><th>취득일자</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+  document.body.appendChild(el);
+  window.addEventListener('afterprint', () => el.remove(), { once: true });
+  window.print();
+}
+
+/* ─────────────────────────────────────────
    모달 공통 열기/닫기
 ───────────────────────────────────────── */
 function openModal(id) {
@@ -103,6 +186,7 @@ export async function openAssetDetail(assetId, afterAction) {
 
     <!-- 상세 정보 패널 -->
     <div id="panelInfo">
+      ${a.photo_url ? `<div class="mb-4 flex justify-center"><img src="${a.photo_url}" alt="자산 사진" class="max-h-48 rounded-lg border border-slate-200 dark:border-slate-700 object-contain" /></div>` : ''}
       <div class="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
         <div><span class="detail-label">자산코드</span><span class="detail-val font-mono">${a.asset_code || '-'}</span></div>
         <div><span class="detail-label">자산명</span><span class="detail-val">${a.asset_name || '-'}</span></div>
@@ -196,10 +280,13 @@ export async function openAssetDetail(assetId, afterAction) {
   });
 
   /* ── 버튼 ── */
+  const printBtn = modal.querySelector('#detailPrintBtn');
   const editBtn = modal.querySelector('#detailEditBtn');
   const dispBtn = modal.querySelector('#detailDisposalBtn');
   const repairBtn = modal.querySelector('#detailRepairBtn');
   const repairCompleteBtn = modal.querySelector('#detailRepairCompleteBtn');
+
+  if (printBtn) printBtn.onclick = () => printAssetDetail(a);
 
   if (editBtn) { editBtn.classList.toggle('hidden', !admin); editBtn.onclick = () => { closeModal('assetDetailModal'); openAssetEdit(assetId, afterAction); }; }
   if (dispBtn) { dispBtn.classList.toggle('hidden', !admin || a.status === '폐기'); dispBtn.onclick = () => { closeModal('assetDetailModal'); openAssetDisposal(assetId, afterAction); }; }
@@ -266,6 +353,12 @@ export async function openAssetEdit(assetId, afterAction) {
         <input name="acquired_date" type="date" class="input" value="${a.acquired_date || ''}" />
       </div>
       <div class="md:col-span-2">
+        <label class="block text-sm mb-1">자산 사진</label>
+        ${a.photo_url ? `<div class="mb-2"><img src="${a.photo_url}" alt="현재 사진" class="max-h-32 rounded border border-slate-200 dark:border-slate-700 object-contain" /></div>` : ''}
+        <input type="file" id="editPhotoInput" accept="image/*" class="input" />
+        <p class="text-xs text-slate-400 mt-1">${a.photo_url ? '새 사진을 선택하면 기존 사진이 교체됩니다.' : '사진을 선택해 주세요. (선택 사항)'}</p>
+      </div>
+      <div class="md:col-span-2">
         <label class="block text-sm mb-1">비고</label>
         <textarea name="note" class="input" rows="2">${a.note || ''}</textarea>
       </div>
@@ -276,7 +369,18 @@ export async function openAssetEdit(assetId, afterAction) {
   form.onsubmit = async e => {
     e.preventDefault();
     const patch = Object.fromEntries(new FormData(e.target));
-    const updated = { ...a, ...patch };
+    const fileInput = modal.querySelector('#editPhotoInput');
+    let photo_url = a.photo_url || null;
+    if (fileInput?.files[0]) {
+      const submitBtn = modal.querySelector('[type="submit"]');
+      if (submitBtn) { submitBtn.disabled = true; submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>업로드 중...'; }
+      try {
+        photo_url = await uploadAssetPhoto(a.id, fileInput.files[0]);
+      } finally {
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = '<i class="fas fa-save mr-1"></i>저장'; }
+      }
+    }
+    const updated = { ...a, ...patch, photo_url };
     await Assets.put(updated);
     await logChange(a, updated, '수정');
     toast('자산 정보가 수정되었습니다.', 'success');
@@ -475,9 +579,9 @@ export async function renderAssetSearch(root, params) {
     });
   };
 
-  ['qText', 'qFloor', 'qStatus'].forEach(id =>
-    root.querySelector('#' + id).addEventListener('input', renderRows)
-  );
+  root.querySelector('#qText').addEventListener('input', renderRows);
+  root.querySelector('#qFloor').addEventListener('change', renderRows);
+  root.querySelector('#qStatus').addEventListener('change', renderRows);
 
   /* QR 스캔 또는 URL params로 자동 검색 */
   const initCode = params instanceof URLSearchParams ? params.get('code') : null;
@@ -553,12 +657,19 @@ export async function renderAssetRegister(root) {
           </select>
         </div>
         <div class="md:col-span-2">
+          <label class="block text-sm mb-1">자산 사진 <span class="text-xs text-slate-400">(선택)</span></label>
+          <input type="file" id="regPhotoInput" accept="image/*" class="input" />
+          <div id="regPhotoPreview" class="mt-2 hidden">
+            <img id="regPhotoImg" class="max-h-32 rounded border border-slate-200 dark:border-slate-700 object-contain" />
+          </div>
+        </div>
+        <div class="md:col-span-2">
           <label class="block text-sm mb-1">비고</label>
           <textarea name="note" class="input" rows="2"></textarea>
         </div>
         <div class="md:col-span-2 flex gap-2 justify-end">
           <button type="reset" class="btn-secondary">초기화</button>
-          <button type="submit" class="btn-primary"><i class="fas fa-save mr-1"></i>등록</button>
+          <button type="submit" id="regSubmitBtn" class="btn-primary"><i class="fas fa-save mr-1"></i>등록</button>
         </div>
       </form>
     </div>
@@ -577,13 +688,36 @@ export async function renderAssetRegister(root) {
     if (cat) root.querySelector('#regCode').value = await generateAssetCode(cat);
   });
 
+  root.querySelector('#regPhotoInput').addEventListener('change', e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      root.querySelector('#regPhotoImg').src = ev.target.result;
+      root.querySelector('#regPhotoPreview').classList.remove('hidden');
+    };
+    reader.readAsDataURL(file);
+  });
+
   root.querySelector('#regForm').addEventListener('submit', async e => {
     e.preventDefault();
     const data = Object.fromEntries(new FormData(e.target));
     if (!data.asset_code) data.asset_code = await generateAssetCode(data.item_category);
-    await Assets.add({ ...data, pos_x: null, pos_y: null });
+    const photoFile = root.querySelector('#regPhotoInput')?.files[0];
+    const btn = root.querySelector('#regSubmitBtn');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>등록 중...'; }
+    const newAsset = await Assets.add({ ...data, pos_x: null, pos_y: null });
+    if (photoFile && newAsset?.id) {
+      try {
+        const photo_url = await uploadAssetPhoto(newAsset.id, photoFile);
+        await Assets.put({ ...newAsset, photo_url });
+      } catch {
+        toast('사진 업로드에 실패했습니다. 자산은 등록되었습니다.', 'warning');
+      }
+    }
     toast('자산이 등록되었습니다.', 'success');
     e.target.reset();
+    root.querySelector('#regPhotoPreview')?.classList.add('hidden');
     renderAssetRegister(root);
   });
 }
@@ -633,7 +767,10 @@ export async function renderAssetList(root) {
     <div class="card">
       <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
         <h3 class="font-semibold" id="alTitle">전체 자산 (${assets.length}건)</h3>
-        <button id="exportBtn" class="btn-secondary"><i class="fas fa-file-excel mr-1"></i>엑셀 내보내기</button>
+        <div class="flex gap-2">
+          <button id="printListBtn" class="btn-secondary"><i class="fas fa-print mr-1"></i>인쇄</button>
+          <button id="exportBtn" class="btn-secondary"><i class="fas fa-file-excel mr-1"></i>엑셀 내보내기</button>
+        </div>
       </div>
       <div class="overflow-x-auto">
         <table class="tbl">
@@ -751,13 +888,30 @@ export async function renderAssetList(root) {
 
   applyFilter();
 
+  /* 인쇄 */
+  root.querySelector('#printListBtn').addEventListener('click', () => printAssetList(filtered));
+
   /* 엑셀 */
   root.querySelector('#exportBtn').addEventListener('click', () => {
-    const ws = XLSX.utils.json_to_sheet(assets.map(a => ({
-      자산코드: a.asset_code, 자산명: a.asset_name, 품목: a.item_category,
-      층: a.floor, 실: a.room, 담당부서: a.department, 담당자: a.manager,
-      상태: a.status, 취득일자: a.acquired_date, 비고: a.note,
-      폐기일자: a.disposed_at, 폐기사유: a.disposal_reason
+    if (typeof XLSX === 'undefined') { toast('Excel 라이브러리를 불러올 수 없습니다.', 'error'); return; }
+    const ws = XLSX.utils.json_to_sheet(filtered.map(a => ({
+      자산코드: a.asset_code,
+      자산명: a.asset_name,
+      품목: a.item_category,
+      제조사: a.maker || '',
+      모델명: a.model || '',
+      시리얼번호: a.serial || '',
+      층: a.floor,
+      실: a.room || '',
+      담당부서: a.department,
+      담당자: a.manager || '',
+      상태: a.status,
+      취득일자: a.acquired_date || '',
+      등록일: a.createdAt ? new Date(a.createdAt).toLocaleDateString('ko') : '',
+      비고: a.note || '',
+      폐기일자: a.disposed_at || '',
+      폐기사유: a.disposal_reason || '',
+      사진: a.photo_url ? '있음' : ''
     })));
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, '자산목록');
