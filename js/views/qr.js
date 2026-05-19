@@ -84,7 +84,7 @@ export async function renderQR(root) {
         <div class="flex items-center justify-between mb-3">
           <h4 class="font-semibold text-sm"><i class="fas fa-eye mr-1"></i>라벨 미리보기</h4>
           <label class="flex items-center gap-2 text-xs text-slate-500">
-            <input id="urlMode" type="checkbox" class="accent-brand-500" />
+            <input id="urlMode" type="checkbox" class="accent-brand-500" checked />
             QR에 URL 포함
           </label>
         </div>

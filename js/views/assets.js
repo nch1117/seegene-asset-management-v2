@@ -381,6 +381,14 @@ export async function renderAssetSearch(root, params) {
     root.querySelector('#qText').value = initCode;
   }
   renderRows();
+
+  /* 정확히 1건 매칭이면 바로 상세 모달 열기 */
+  if (initCode) {
+    const exact = assets.filter(a => a.asset_code === initCode);
+    if (exact.length === 1) {
+      openAssetDetail(exact[0].id, () => renderAssetSearch(root, params));
+    }
+  }
 }
 
 /* ═══════════════════════════════════════════════════
