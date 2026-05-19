@@ -1,6 +1,7 @@
 /* 폐기 자산 대장 */
 import { Assets } from '../store.js';
 import { isAdmin } from '../auth.js';
+import { writeXlsx } from '../utils/excel.js';
 
 const PAGE_SIZE = 20;
 
@@ -77,6 +78,7 @@ export async function renderDisposal(root) {
           </div>
         </div>
 
+        <p id="dispPager" class="text-xs text-slate-400 mb-2 flex items-center gap-2"></p>
         <div class="overflow-x-auto">
           <table class="tbl">
             <thead>
@@ -95,8 +97,6 @@ export async function renderDisposal(root) {
             <tbody id="dispBody"></tbody>
           </table>
         </div>
-
-        <p id="dispPager" class="text-xs text-slate-400 mt-2 flex items-center gap-2"></p>
       </div>
     </div>
   `;
@@ -175,23 +175,19 @@ export async function renderDisposal(root) {
 
   /* 엑셀 다운로드 (필터 적용된 결과) */
   root.querySelector('#exportDispBtn').addEventListener('click', () => {
-    const rows = filtered.map(a => ({
-      자산코드:  a.asset_code     || '',
-      자산명:    a.asset_name     || '',
-      품목:      a.item_category  || '',
-      층:        a.floor          || '',
-      실:        a.room           || '',
-      담당부서:  a.department     || '',
-      담당자:    a.manager        || '',
-      취득일자:  a.acquired_date  || '',
-      폐기일자:  a.disposed_at    || '',
+    writeXlsx(filtered.map(a => ({
+      자산코드:  a.asset_code      || '',
+      자산명:    a.asset_name      || '',
+      품목:      a.item_category   || '',
+      층:        a.floor           || '',
+      실:        a.room            || '',
+      담당부서:  a.department      || '',
+      담당자:    a.manager         || '',
+      취득일자:  a.acquired_date   || '',
+      폐기일자:  a.disposed_at     || '',
       폐기사유:  a.disposal_reason || '',
-      비고:      a.note           || ''
-    }));
-    const ws = XLSX.utils.json_to_sheet(rows);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, '폐기자산대장');
-    XLSX.writeFile(wb, `폐기자산대장_${new Date().toISOString().slice(0, 10)}.xlsx`);
+      비고:      a.note            || ''
+    })), '폐기자산대장', `폐기자산대장_${new Date().toISOString().slice(0, 10)}.xlsx`);
   });
 
   renderTable();

@@ -835,19 +835,42 @@ body.role-dept  .dept-only-block  { display: block; }
 #printAssetDetail, #printAssetList { display: none; }
 
 @media print {
+  @page { size: A4 portrait; margin: 12mm 10mm; }
+
   body > *:not(#printArea):not(#printAssetDetail):not(#printAssetList) { display: none !important; }
 
   #printArea, #printAssetDetail, #printAssetList {
     display: block !important;
-    position: fixed; inset: 0; z-index: 9999;
-    background: #fff; padding: 1.5cm 2cm; overflow: auto;
+    position: static !important;
+    width: 100%; padding: 0; margin: 0;
+    background: #fff;
     color: #000; font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
   }
 
-  /* QR 라벨 */
-  .qr-label-grid { grid-template-columns: repeat(3, 1fr); gap: 4mm; }
-  .qr-label { border: 1px solid #ccc; padding: 4mm 3mm; border-radius: 3mm; }
-  .qr-label__img { width: 22mm; height: 22mm; }
+  #printAssetDetail, #printAssetList { padding: 0 4mm; }
+
+  /* QR 라벨 그리드 */
+  .qr-label-grid {
+    display: grid !important;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 3mm;
+  }
+  .qr-label {
+    border: 0.6px solid #aaa;
+    padding: 3mm 2mm;
+    border-radius: 2mm;
+    break-inside: avoid;
+    page-break-inside: avoid;
+    display: flex !important;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+  .qr-label__img { width: 26mm; height: 26mm; display: flex; align-items: center; justify-content: center; }
+  .qr-label__img canvas { display: block !important; width: 26mm !important; height: 26mm !important; }
+  .qr-label__code { font-size: 6.5pt; font-weight: 700; font-family: monospace; color: #000; margin-top: 1.5mm; }
+  .qr-label__name { font-size: 7pt; font-weight: 600; color: #000; line-height: 1.3; margin-top: 1mm; max-width: 38mm; word-break: keep-all; }
+  .qr-label__loc  { font-size: 6pt; color: #444; margin-top: 0.5mm; }
 
   /* 자산 인쇄 공통 헤더 */
   .print-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 6mm; padding-bottom: 3mm; border-bottom: 1.5px solid #333; }

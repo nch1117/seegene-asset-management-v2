@@ -1,6 +1,7 @@
 /* 수리 이력 전체 목록 (관리자) */
 import { Assets, RepairHistory } from '../store.js';
 import { toast } from '../ui/toast.js';
+import { writeAoaXlsx } from '../utils/excel.js';
 
 export async function renderRepair(root) {
   const [assets, repairs] = await Promise.all([Assets.list(), RepairHistory.list()]);
@@ -117,16 +118,13 @@ export async function renderRepair(root) {
 
   /* ── Excel 내보내기 ── */
   root.querySelector('#exportRepairBtn').addEventListener('click', () => {
-    if (typeof XLSX === 'undefined') { toast('Excel 라이브러리를 불러올 수 없습니다.', 'error'); return; }
     const rows = [['접수일', '자산코드', '자산명', '부서', '업체', '증상/내용', '상태', '완료일', '비용(원)']];
     filtered.forEach(r => rows.push([
       fmt(r.reported_at), r.asset_code || '', r.asset_name || '', r.department || '',
       r.vendor || '', r.description || '', r.status,
       fmt(r.completed_at), r.cost || 0
     ]));
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), '수리이력');
-    XLSX.writeFile(wb, `수리이력_${new Date().toISOString().slice(0,10)}.xlsx`);
+    writeAoaXlsx(rows, '수리이력', `수리이력_${new Date().toISOString().slice(0,10)}.xlsx`);
   });
 
   renderTable();

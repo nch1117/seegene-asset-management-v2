@@ -2,6 +2,7 @@
 import { Assets, MoveRequests, MoveHistory } from '../store.js';
 import { toast } from '../ui/toast.js';
 import { getSession, isAdmin } from '../auth.js';
+import { writeXlsx } from '../utils/excel.js';
 
 const FLOORS = ['2층', '3층', '4층', '5층', '6층', '7층'];
 
@@ -52,6 +53,7 @@ export async function renderMoveRequest(root) {
         </div>
 
         <!-- 자산 목록 -->
+        <p id="s1Hint" class="text-xs text-slate-400 mb-2"></p>
         <div class="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">
           <table class="tbl">
             <thead><tr>
@@ -60,7 +62,6 @@ export async function renderMoveRequest(root) {
             <tbody id="s1Body"></tbody>
           </table>
         </div>
-        <p id="s1Hint" class="text-xs text-slate-400 mt-2"></p>
         <div class="flex justify-end mt-4">
           <button id="s1Next" class="btn-primary" disabled>
             다음 <i class="fas fa-arrow-right ml-1"></i>
@@ -277,6 +278,7 @@ export async function renderDisposalRequest(root) {
             ${depts.map(d => `<option>${d}</option>`).join('')}
           </select>
         </div>
+        <p id="d1Hint" class="text-xs text-slate-400 mb-2"></p>
         <div class="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">
           <table class="tbl">
             <thead><tr>
@@ -285,7 +287,6 @@ export async function renderDisposalRequest(root) {
             <tbody id="d1Body"></tbody>
           </table>
         </div>
-        <p id="d1Hint" class="text-xs text-slate-400 mt-2"></p>
         <div class="flex justify-end mt-4">
           <button id="d1Next" class="btn-primary" disabled>
             다음 <i class="fas fa-arrow-right ml-1"></i>
@@ -685,10 +686,7 @@ export async function exportAllRequestsExcel() {
 }
 
 function downloadXlsx(rows, sheetName, fileName) {
-  const ws = XLSX.utils.json_to_sheet(rows);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, sheetName);
-  XLSX.writeFile(wb, fileName);
+  writeXlsx(rows, sheetName, fileName);
 }
 
 function dateTag() {

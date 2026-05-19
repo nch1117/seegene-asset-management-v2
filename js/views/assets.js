@@ -3,6 +3,7 @@ import { Assets, AssetHistory, RepairHistory } from '../store.js';
 import { toast } from '../ui/toast.js';
 import { isAdmin, getSession } from '../auth.js';
 import { storage } from '../firebase.js';
+import { writeXlsx } from '../utils/excel.js';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-storage.js';
 
 /* ── 수정 이력 추적 필드 ── */
@@ -352,6 +353,18 @@ export async function openAssetEdit(assetId, afterAction) {
         <label class="block text-sm mb-1">취득일자</label>
         <input name="acquired_date" type="date" class="input" value="${a.acquired_date || ''}" />
       </div>
+      <div>
+        <label class="block text-sm mb-1">제조사</label>
+        <input name="maker" class="input" value="${a.maker || ''}" placeholder="예: Samsung, LG, HP" />
+      </div>
+      <div>
+        <label class="block text-sm mb-1">모델명</label>
+        <input name="model" class="input" value="${a.model || ''}" placeholder="예: Xpress M2070W" />
+      </div>
+      <div>
+        <label class="block text-sm mb-1">시리얼번호</label>
+        <input name="serial" class="input" value="${a.serial || ''}" placeholder="예: SN12345678" />
+      </div>
       <div class="md:col-span-2">
         <label class="block text-sm mb-1">자산 사진</label>
         ${a.photo_url ? `<div class="mb-2"><img src="${a.photo_url}" alt="현재 사진" class="max-h-32 rounded border border-slate-200 dark:border-slate-700 object-contain" /></div>` : ''}
@@ -599,6 +612,29 @@ export async function renderAssetSearch(root, params) {
   }
 }
 
+/* 이미지 → 1024px 이하 JPEG base64 */
+async function resizeImage(file, maxPx = 1024) {
+  return new Promise(resolve => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const scale = Math.min(1, maxPx / Math.max(img.width, img.height));
+      const w = Math.round(img.width * scale);
+      const h = Math.round(img.height * scale);
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      canvas.toBlob(blob => {
+        const reader = new FileReader();
+        reader.onload = e => resolve({ base64: e.target.result.split(',')[1], mediaType: 'image/jpeg' });
+        reader.readAsDataURL(blob);
+      }, 'image/jpeg', 0.85);
+    };
+    img.src = url;
+  });
+}
+
 /* ═══════════════════════════════════════════════════
    자산 등록 (관리자)
 ═══════════════════════════════════════════════════ */
@@ -656,9 +692,26 @@ export async function renderAssetRegister(root) {
             ${STATUS_OPTS.map(s => `<option>${s}</option>`).join('')}
           </select>
         </div>
+        <div>
+          <label class="block text-sm mb-1">제조사</label>
+          <input name="maker" id="regMaker" class="input" placeholder="예: Samsung, LG, HP" />
+        </div>
+        <div>
+          <label class="block text-sm mb-1">모델명</label>
+          <input name="model" id="regModel" class="input" placeholder="예: Xpress M2070W" />
+        </div>
+        <div>
+          <label class="block text-sm mb-1">시리얼번호</label>
+          <input name="serial" id="regSerial" class="input" placeholder="예: SN12345678" />
+        </div>
         <div class="md:col-span-2">
           <label class="block text-sm mb-1">자산 사진 <span class="text-xs text-slate-400">(선택)</span></label>
-          <input type="file" id="regPhotoInput" accept="image/*" class="input" />
+          <div class="flex gap-2 items-center">
+            <input type="file" id="regPhotoInput" accept="image/*" class="input flex-1" />
+            <button type="button" id="aiAnalyzeBtn" class="btn-secondary hidden shrink-0 whitespace-nowrap">
+              <i class="fas fa-wand-magic-sparkles mr-1 text-purple-500"></i>AI 자동 입력
+            </button>
+          </div>
           <div id="regPhotoPreview" class="mt-2 hidden">
             <img id="regPhotoImg" class="max-h-32 rounded border border-slate-200 dark:border-slate-700 object-contain" />
           </div>
@@ -697,6 +750,36 @@ export async function renderAssetRegister(root) {
       root.querySelector('#regPhotoPreview').classList.remove('hidden');
     };
     reader.readAsDataURL(file);
+    root.querySelector('#aiAnalyzeBtn').classList.remove('hidden');
+  });
+
+  root.querySelector('#aiAnalyzeBtn').addEventListener('click', async () => {
+    const file = root.querySelector('#regPhotoInput').files[0];
+    if (!file) return;
+    const btn = root.querySelector('#aiAnalyzeBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>분석 중...';
+    try {
+      const { base64, mediaType } = await resizeImage(file);
+      const res = await fetch('/api/analyze-asset', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ image: base64, mediaType })
+      });
+      const json = await res.json();
+      if (!json.ok) { toast(json.error || 'AI 분석 실패', 'error'); return; }
+      const d = json.data;
+      if (d.asset_name) root.querySelector('[name="asset_name"]').value = d.asset_name;
+      if (d.maker)      root.querySelector('#regMaker').value  = d.maker;
+      if (d.model)      root.querySelector('#regModel').value  = d.model;
+      if (d.serial)     root.querySelector('#regSerial').value = d.serial;
+      toast('AI 분석 완료! 내용을 확인해 주세요.', 'success');
+    } catch {
+      toast('AI 분석 중 오류가 발생했습니다.', 'error');
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-wand-magic-sparkles mr-1 text-purple-500"></i>AI 자동 입력';
+    }
   });
 
   root.querySelector('#regForm').addEventListener('submit', async e => {
@@ -772,6 +855,7 @@ export async function renderAssetList(root) {
           <button id="exportBtn" class="btn-secondary"><i class="fas fa-file-excel mr-1"></i>엑셀 내보내기</button>
         </div>
       </div>
+      <p id="alPager" class="text-xs text-slate-400 mb-2"></p>
       <div class="overflow-x-auto">
         <table class="tbl">
           <thead><tr>
@@ -780,7 +864,6 @@ export async function renderAssetList(root) {
           <tbody id="alBody"></tbody>
         </table>
       </div>
-      <p id="alPager" class="text-xs text-slate-400 mt-2"></p>
     </div>
   `;
 
@@ -893,28 +976,24 @@ export async function renderAssetList(root) {
 
   /* 엑셀 */
   root.querySelector('#exportBtn').addEventListener('click', () => {
-    if (typeof XLSX === 'undefined') { toast('Excel 라이브러리를 불러올 수 없습니다.', 'error'); return; }
-    const ws = XLSX.utils.json_to_sheet(filtered.map(a => ({
-      자산코드: a.asset_code,
-      자산명: a.asset_name,
-      품목: a.item_category,
+    writeXlsx(filtered.map(a => ({
+      자산코드: a.asset_code || '',
+      자산명: a.asset_name || '',
+      품목: a.item_category || '',
       제조사: a.maker || '',
       모델명: a.model || '',
       시리얼번호: a.serial || '',
-      층: a.floor,
+      층: a.floor || '',
       실: a.room || '',
-      담당부서: a.department,
+      담당부서: a.department || '',
       담당자: a.manager || '',
-      상태: a.status,
+      상태: a.status || '',
       취득일자: a.acquired_date || '',
       등록일: a.createdAt ? new Date(a.createdAt).toLocaleDateString('ko') : '',
       비고: a.note || '',
       폐기일자: a.disposed_at || '',
       폐기사유: a.disposal_reason || '',
       사진: a.photo_url ? '있음' : ''
-    })));
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, '자산목록');
-    XLSX.writeFile(wb, `자산목록_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    })), '자산목록', `자산목록_${new Date().toISOString().slice(0, 10)}.xlsx`);
   });
 }

@@ -1,6 +1,7 @@
 /* 보고서 — 부서별 현황 / 월별 현황 / 노후 자산 */
 import { Assets, MoveHistory, RepairHistory } from '../store.js';
 import { toast } from '../ui/toast.js';
+import { writeAoaXlsx } from '../utils/excel.js';
 
 const AGE_MS = yrs => yrs * 365.25 * 24 * 3600 * 1000;
 
@@ -10,10 +11,7 @@ function ageYears(date) {
 }
 
 function xlsxDownload(sheetName, rows, filename) {
-  if (typeof XLSX === 'undefined') { toast('Excel 라이브러리를 불러올 수 없습니다.', 'error'); return; }
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), sheetName);
-  XLSX.writeFile(wb, filename);
+  writeAoaXlsx(rows, sheetName, filename);
 }
 
 export async function renderReport(root) {

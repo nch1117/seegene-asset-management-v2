@@ -64,6 +64,7 @@ export async function renderQR(root) {
           </select>
         </div>
 
+        <p id="filterHint" class="text-xs text-slate-400 mb-2"></p>
         <div class="overflow-x-auto">
           <table class="tbl text-xs">
             <thead><tr>
@@ -73,7 +74,6 @@ export async function renderQR(root) {
             <tbody id="assetSelectBody"></tbody>
           </table>
         </div>
-        <p id="filterHint" class="text-xs text-slate-400 mt-2"></p>
       </div>
 
       <!-- 라벨 미리보기 -->
@@ -328,25 +328,25 @@ export async function renderQR(root) {
   }
 
   /* ── 인쇄 ── */
-  root.querySelector('#printBtn').addEventListener('click', () => {
+  root.querySelector('#printBtn').addEventListener('click', async () => {
     if (!selected.size) { toast('인쇄할 자산을 선택하세요.', 'warning'); return; }
     const selAssets = assets.filter(a => selected.has(a.id));
     const urlMode   = root.querySelector('#urlMode').checked;
 
     const printArea = document.createElement('div');
     printArea.id = 'printArea';
-    printArea.innerHTML = `<div id="printGrid" class="qr-label-grid">${
+    printArea.innerHTML = `<div class="qr-label-grid">${
       selAssets.map(a => labelHtml(a, urlMode, true)).join('')
     }</div>`;
     document.body.appendChild(printArea);
 
-    selAssets.forEach(a => generateQR(a, urlMode, `qrprint-${a.id}`));
+    /* 고해상도(160px)로 QR 생성 후 두 프레임 대기 → 캔버스 렌더 완료 보장 */
+    selAssets.forEach(a => generateQR(a, urlMode, `qrprint-${a.id}`, 160));
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
 
-    setTimeout(() => {
-      window.print();
-      document.body.removeChild(printArea);
-      toast('인쇄 창이 열렸습니다. PDF로 저장할 수 있습니다.', 'info');
-    }, 500);
+    window.addEventListener('afterprint', () => printArea.remove(), { once: true });
+    window.print();
+    toast('인쇄 창이 열렸습니다. PDF로 저장할 수 있습니다.', 'info');
   });
 
   renderTable();
@@ -365,7 +365,7 @@ function labelHtml(a, urlMode, forPrint) {
     </div>`;
 }
 
-function generateQR(a, urlMode, containerId) {
+function generateQR(a, urlMode, containerId, size = 90) {
   const el = document.getElementById(containerId);
   if (!el) return;
 
@@ -386,7 +386,7 @@ function generateQR(a, urlMode, containerId) {
     new QRious({
       element: canvas,
       value: text,
-      size: 90,
+      size: size,
       foreground: '#0f172a',
       background: '#ffffff',
       level: 'M'

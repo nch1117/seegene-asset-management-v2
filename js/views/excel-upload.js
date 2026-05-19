@@ -1,6 +1,7 @@
 /* 엑셀 일괄 업로드 — 3색 검증 + 일괄 등록 */
 import { Assets } from '../store.js';
 import { toast } from '../ui/toast.js';
+import { writeAoaXlsx } from '../utils/excel.js';
 
 const REQUIRED  = ['자산명', '품목', '층', '담당부서'];
 const OPTIONAL  = ['담당자', '취득일자', '제조사', '모델명', '시리얼번호'];
@@ -113,14 +114,7 @@ export async function renderExcelUpload(root) {
   root.querySelector('#dlTemplate').addEventListener('click', () => {
     const headers = ['자산코드','자산명','품목','층','실','담당부서','담당자','취득일자','상태','제조사','모델명','시리얼번호','비고'];
     const example = ['','노트북 Dell E5540','노트북','3층','301호','진단검사팀','홍길동','2024-01-15','정상','Dell','Latitude E5540','SN12345678',''];
-    const ws = XLSX.utils.aoa_to_sheet([headers, example]);
-
-    /* 컬럼 너비 설정 */
-    ws['!cols'] = headers.map(h => ({ wch: Math.max(h.length * 2, 12) }));
-
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, '자산');
-    XLSX.writeFile(wb, '자산_업로드_템플릿.xlsx');
+    writeAoaXlsx([headers, example], '자산', '자산_업로드_템플릿.xlsx');
   });
 
   /* 드래그 앤 드롭 */
