@@ -396,24 +396,23 @@ function generateQR(a, urlMode, containerId) {
 
   el.innerHTML = '';
 
-  if (typeof QRCode === 'undefined') {
+  if (typeof QRious === 'undefined') {
     el.innerHTML = '<span class="text-xs text-red-400">QR 라이브러리 로드 실패</span>';
     return;
   }
 
   try {
-    new QRCode(el, {
-      text,
-      width: 90,
-      height: 90,
-      colorDark: '#0f172a',
-      colorLight: '#ffffff',
-      correctLevel: QRCode.CorrectLevel.M
+    const canvas = document.createElement('canvas');
+    el.appendChild(canvas);
+    new QRious({
+      element: canvas,
+      value: text,
+      size: 90,
+      foreground: '#0f172a',
+      background: '#ffffff',
+      level: 'M'
     });
-    /* qrcodejs는 img+canvas를 모두 추가하므로 canvas만 남김 */
-    const img = el.querySelector('img');
-    if (img) img.remove();
   } catch (e) {
-    el.innerHTML = '<span class="text-xs text-red-400">QR 생성 오류</span>';
+    el.innerHTML = `<span class="text-xs text-red-400">QR 오류: ${e.message}</span>`;
   }
 }
